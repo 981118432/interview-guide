@@ -8,7 +8,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parent
+PROJECT_ROOT = ROOT.parent
 OUTPUT = ROOT / "reader.html"
+
+SECTION_META = {
+    "00-interview-prep": "00 · 面试准备",
+    "01-foundations": "01 · 基础知识",
+    "02-model-landscape": "02 · 模型版图",
+    "03-training-and-adaptation": "03 · 训练与适配",
+}
 
 DOC_META = {
     "README.md": {
@@ -76,9 +84,14 @@ HTML_TEMPLATE = r'''<!doctype html>
     aside { padding:24px 16px; background:#111827; color:#dbe5f2; }
     aside h1 { margin:0 8px 6px; font-size:18px; color:#fff; }
     aside p { margin:0 8px 20px; color:#9fb0c5; font-size:13px; }
-    .doc-list { display:grid; gap:6px; }
-    .doc-list button { border:0; border-radius:8px; padding:10px 12px; text-align:left; background:transparent; color:#c9d5e4; cursor:pointer; font:inherit; }
+    .doc-list { display:grid; gap:12px; }
+    .section { display:grid; gap:4px; }
+    .section-title { padding:6px 8px 3px; color:#8fa5bf; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .section-docs { display:grid; gap:3px; }
+    .doc-list button { border:0; border-radius:8px; padding:9px 10px; text-align:left; background:transparent; color:#c9d5e4; cursor:pointer; font:inherit; }
     .doc-list button:hover,.doc-list button.active { background:#263650; color:#fff; }
+    .doc-list .doc-name { display:block; font-size:13px; }
+    .doc-list .doc-file { display:block; margin-top:1px; color:#8195ad; font-size:10px; }
     main { min-width:0; padding:32px clamp(18px,4vw,56px); }
     .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:20px; }
     .eyebrow { margin:0 0 4px; color:var(--brand); font-size:13px; font-weight:700; }
@@ -175,7 +188,9 @@ function render() {
   const doc = documents[current];
   document.getElementById('eyebrow').textContent = doc.label;
   document.getElementById('title').textContent = doc.title_zh;
-  document.getElementById('doc-list').innerHTML = documents.map((item, index) => `<button class="${index === current ? 'active' : ''}" data-doc="${index}">${item.label}</button>`).join('');
+  const sections = [...new Map(documents.map((item, index) => [item.section_id, { id: item.section_id, label: item.section_label, items: [] }])).values()];
+  documents.forEach((item, index) => sections.find(section => section.id === item.section_id).items.push({ item, index }));
+  document.getElementById('doc-list').innerHTML = sections.map(section => `<div class="section"><div class="section-title">${section.label}</div><div class="section-docs">${section.items.map(({item, index}) => `<button class="${index === current ? 'active' : ''}" data-doc="${index}"><span class="doc-name">${item.label}</span><span class="doc-file">${item.filename}</span></button>`).join('')}</div></div>`).join('');
   document.querySelectorAll('[data-doc]').forEach(button => button.onclick = () => { current = Number(button.dataset.doc); mode = 'english'; render(); });
   document.getElementById('tabs').innerHTML = modes.map(item => `<button class="${item.id === mode ? 'active' : ''}" data-mode="${item.id}">${item.label}</button>`).join('');
   document.querySelectorAll('[data-mode]').forEach(button => button.onclick = () => { mode = button.dataset.mode; render(); });
@@ -194,12 +209,39 @@ render();
 def build() -> None:
     documents = []
     for filename, meta in DOC_META.items():
-        content = (ROOT / filename).read_text(encoding="utf-8")
-        zh_path = ROOT / filename.replace(".md", ".zh.md")
-        summary_path = ROOT / filename.replace(".md", ".summary.md")
+        source_path = ROOT / filename
+        content = source_path.read_text(encoding="utf-8")
+        zh_path = source_path.with_suffix(".zh.md")
+        summary_path = source_path.with_suffix(".summary.md")
         content_zh = zh_path.read_text(encoding="utf-8") if zh_path.exists() else ""
         summary_content = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
-        documents.append({"filename": filename, **meta, "content": content, "content_zh": content_zh, "summary_content": summary_content})
+        documents.append({"filename": filename, "section_id": "00-interview-prep", "section_label": SECTION_META["00-interview-prep"], **meta, "content": content, "content_zh": content_zh, "summary_content": summary_content})
+
+    for section_id, section_label in SECTION_META.items():
+        if section_id == "00-interview-prep":
+            continue
+        for source_path in sorted((PROJECT_ROOT / section_id).glob("*.md")):
+            if source_path.name.endswith(".zh.md") or source_path.name.endswith(".summary.md"):
+                continue
+            content = source_path.read_text(encoding="utf-8")
+            zh_path = source_path.with_suffix(".zh.md")
+            summary_path = source_path.with_suffix(".summary.md")
+            content_zh = zh_path.read_text(encoding="utf-8") if zh_path.exists() else ""
+            summary_content = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
+            title_zh = next((line[2:].strip() for line in content_zh.splitlines() if line.startswith("# ")), source_path.stem)
+            label = source_path.stem.replace("-", " ")
+            documents.append({
+                "filename": f"{section_id}/{source_path.name}",
+                "section_id": section_id,
+                "section_label": section_label,
+                "label": label,
+                "title_zh": title_zh,
+                "summary": summary_content.splitlines()[2] if len(summary_content.splitlines()) > 2 else f"{title_zh}的中文学习内容。",
+                "detail": "",
+                "content": content,
+                "content_zh": content_zh,
+                "summary_content": summary_content,
+            })
     payload = json.dumps(documents, ensure_ascii=False).replace("</", "<\\/")
     OUTPUT.write_text(HTML_TEMPLATE.replace("__DOCUMENTS__", payload), encoding="utf-8")
     print(f"Built {OUTPUT} with {len(documents)} documents.")
