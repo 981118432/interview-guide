@@ -18,6 +18,27 @@ SECTION_META = {
     "03-training-and-adaptation": "03 · 训练与适配",
 }
 
+DOC_LABELS_ZH = {
+    "01-llm-internals": "LLM 内部机制",
+    "02-tokenization-deep-dive": "Tokenization 深入理解",
+    "03-attention-mechanisms": "Attention 机制",
+    "04-transformer-architecture": "Transformer 架构",
+    "05-embeddings-and-vector-spaces": "Embedding 与向量空间",
+    "06-inference-pipeline": "推理流水线",
+    "01-model-taxonomy": "模型分类与版图",
+    "02-capability-assessment": "模型能力评估",
+    "03-pricing-and-costs": "模型价格与成本",
+    "04-model-selection-guide": "模型选择指南",
+    "01-pretraining-basics": "预训练基础",
+    "02-fine-tuning-strategies": "微调策略",
+    "03-lora-qlora-peft": "LoRA、QLoRA 与 PEFT",
+    "04-rlhf-and-dpo": "RLHF 与 DPO：对齐训练",
+    "05-knowledge-distillation": "知识蒸馏",
+    "06-synthetic-data-generation": "合成数据生成",
+    "07-quantization-deep-dive": "量化深入理解",
+    "08-rlvr-and-reasoning-models": "RLVR 与推理模型训练",
+}
+
 DOC_META = {
     "README.md": {
         "label": "阅读地图",
@@ -236,7 +257,7 @@ def build() -> None:
             content_zh = zh_path.read_text(encoding="utf-8") if zh_path.exists() else ""
             summary_content = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
             title_zh = next((line[2:].strip() for line in content_zh.splitlines() if line.startswith("# ")), source_path.stem)
-            label = source_path.stem.replace("-", " ")
+            label = DOC_LABELS_ZH.get(source_path.stem, source_path.stem.replace("-", " "))
             documents.append({
                 "filename": f"{section_id}/{source_path.name}",
                 "section_id": section_id,
