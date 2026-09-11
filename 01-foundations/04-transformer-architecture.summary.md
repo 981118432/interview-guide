@@ -1,3 +1,3 @@
 # 《Transformer 架构》中文概要
 
-从输入 token 到最终 logits 梳理 Transformer 前向过程，并理解 Llama、Mistral、MoE、MLA、Pre-Norm 和 GQA 等现代变体。
+完整梳理从 Token Embedding、位置编码、Transformer Block 到 LM Head/logits 的前向过程，掌握 Pre-Norm、RMSNorm、SwiGLU、GQA、MoE、MLA、绑定/非绑定 Embedding、参数量与 FLOPs，并比较 GPT-2、Llama 2/3、Mistral 等架构选择。
