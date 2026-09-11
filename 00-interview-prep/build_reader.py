@@ -181,8 +181,8 @@ function render() {
   document.querySelectorAll('[data-mode]').forEach(button => button.onclick = () => { mode = button.dataset.mode; render(); });
   const panel = document.getElementById('panel');
   if (mode === 'english') panel.innerHTML = `<div class="markdown">${renderMarkdown(doc.content)}</div>`;
-  if (mode === 'chinese') panel.innerHTML = `<div class="detail"><div class="summary"><strong>中文学习提示</strong><br>${doc.summary}</div>${doc.detail}</div>`;
-  if (mode === 'summary') panel.innerHTML = `<div class="summary"><strong>中文概要</strong><br>${doc.summary}</div><p>建议：先阅读本概要，再切换到英文详情定位原文，最后用中文详情整理自己的面试表达。</p>`;
+  if (mode === 'chinese') panel.innerHTML = `<div class="markdown"><div class="summary"><strong>中文学习提示</strong><br>${doc.summary}</div>${renderMarkdown(doc.content_zh || doc.detail)}</div>`;
+  if (mode === 'summary') panel.innerHTML = `<div class="markdown">${renderMarkdown(doc.summary_content || `## 中文概要\n\n${doc.summary}\n\n建议：先阅读本概要，再切换到英文详情定位原文，最后用中文详情整理自己的面试表达。`)}</div>`;
 }
 render();
 </script>
@@ -195,7 +195,11 @@ def build() -> None:
     documents = []
     for filename, meta in DOC_META.items():
         content = (ROOT / filename).read_text(encoding="utf-8")
-        documents.append({"filename": filename, **meta, "content": content})
+        zh_path = ROOT / filename.replace(".md", ".zh.md")
+        summary_path = ROOT / filename.replace(".md", ".summary.md")
+        content_zh = zh_path.read_text(encoding="utf-8") if zh_path.exists() else ""
+        summary_content = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
+        documents.append({"filename": filename, **meta, "content": content, "content_zh": content_zh, "summary_content": summary_content})
     payload = json.dumps(documents, ensure_ascii=False).replace("</", "<\\/")
     OUTPUT.write_text(HTML_TEMPLATE.replace("__DOCUMENTS__", payload), encoding="utf-8")
     print(f"Built {OUTPUT} with {len(documents)} documents.")
