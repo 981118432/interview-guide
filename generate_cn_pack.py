@@ -1,6 +1,7 @@
 """Generate Chinese detail and summary files for the first three study sections."""
 
 from pathlib import Path
+import sys
 
 
 PACK = {
@@ -362,11 +363,14 @@ def main() -> None:
         source = Path(relative)
         zh = source.with_suffix(".zh.md")
         summary = source.with_suffix(".summary.md")
-        zh.write_text(data["detail"].rstrip() + "\n", encoding="utf-8")
-        summary.write_text(
-            f"# 《{data['title']}》中文概要\n\n{data['summary']}\n",
-            encoding="utf-8",
-        )
+        force = "--force" in sys.argv
+        if force or not zh.exists():
+            zh.write_text(data["detail"].rstrip() + "\n", encoding="utf-8")
+        if force or not summary.exists():
+            summary.write_text(
+                f"# 《{data['title']}》中文概要\n\n{data['summary']}\n",
+                encoding="utf-8",
+            )
         print(f"generated {zh} and {summary}")
 
 
