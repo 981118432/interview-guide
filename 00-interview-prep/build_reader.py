@@ -20,6 +20,18 @@ SECTION_META = {
     "05-prompting-and-context": "05 · Prompt 与上下文",
     "06-retrieval-systems": "06 · 检索系统",
     "07-agentic-systems": "07 · Agent 系统",
+    "08-memory-and-state": "08 · 记忆与状态",
+    "09-frameworks-and-tools": "09 · 框架与工具",
+    "10-document-processing": "10 · 文档处理",
+    "11-infrastructure-and-mlops": "11 · 基础设施与 MLOps",
+    "12-security-and-access": "12 · 安全与访问控制",
+    "13-reliability-and-safety": "13 · 可靠性与安全",
+    "14-evaluation-and-observability": "14 · 评测与可观测性",
+    "15-ai-design-patterns": "15 · AI 设计模式",
+    "16-case-studies": "16 · 案例研究",
+    "17-tool-use-and-computer-agents": "17 · 工具使用与计算机 Agent",
+    "18-voice-and-audio-agents": "18 · 语音与音频 Agent",
+    "19-multimodal-generation": "19 · 多模态生成",
 }
 
 DOC_LABELS_ZH = {
@@ -306,7 +318,13 @@ def build() -> None:
             content_zh = zh_path.read_text(encoding="utf-8") if zh_path.exists() else ""
             summary_content = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
             title_zh = next((line[2:].strip() for line in content_zh.splitlines() if line.startswith("# ")), source_path.stem)
-            label = DOC_LABELS_ZH.get(source_path.stem, source_path.stem.replace("-", " "))
+            label = DOC_LABELS_ZH.get(
+                source_path.stem,
+                next(
+                    (line[2:].strip() for line in content_zh.splitlines() if line.startswith("# ")),
+                    source_path.stem.replace("-", " "),
+                ),
+            )
             documents.append({
                 "filename": f"{section_id}/{source_path.name}",
                 "section_id": section_id,
