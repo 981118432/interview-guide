@@ -1,38 +1,38 @@
 # LLM 可观测性
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-Observability for LLM systems requires adapting the three pillars of logs, metrics, and traces for the unique characteristics of AI applications.
+LLM 系统的可观测性需要针对 AI 应用的独特特征，重新适配日志、指标和追踪这三大支柱。
 
 ## 目录
 
-- [Why LLM Observability is Different](#why-llm-observability-is-different)
-- [The Three Pillars](#the-three-pillars)
-- [Key Metrics](#key-metrics)
-- [Tracing LLM Pipelines](#tracing-llm-pipelines)
-- [Quality Monitoring](#quality-monitoring)
-- [Cost Tracking](#cost-tracking)
-- [Alerting Strategy](#alerting-strategy)
-- [Observability Tools](#observability-tools)
-- [Interview Questions](#interview-questions)
-- [References](#references)
+- [LLM 可观测性为何不同](#why-llm-observability-is-different)
+- [三大支柱](#the-three-pillars)
+- [关键指标](#key-metrics)
+- [追踪 LLM 流水线](#tracing-llm-pipelines)
+- [质量监控](#quality-monitoring)
+- [成本跟踪](#cost-tracking)
+- [告警策略](#alerting-strategy)
+- [可观测性工具](#observability-tools)
+- [面试问题](#interview-questions)
+- [参考资料](#references)
 
 ---
 
 ## LLM 可观测性为何不同
 
-Traditional observability focuses on:
-- Request/response patterns
-- Latency and throughput
-- Error rates
-- Resource utilization
+传统可观测性关注：
+- 请求/响应模式。
+- 延迟和吞吐量。
+- 错误率。
+- 资源利用率。
 
-LLM systems add:
-- **Quality is a first-class metric**: A fast, available system producing bad outputs is failing
-- **Non-determinism**: Same input can produce different outputs
-- **Token economics**: Cost scales with usage in complex ways
-- **Multi-component pipelines**: RAG has retrieval, reranking, generation steps
-- **Subjective correctness**: Often no ground truth to compare against
+LLM 系统还增加了：
+- **质量是一等指标**：一个快速且可用、却持续产生糟糕输出的系统仍然是失败的。
+- **非确定性**：相同输入可能产生不同输出。
+- **Token 经济学**：成本会以复杂方式随使用量增长。
+- **多组件流水线**：RAG 包含检索、重排序和生成步骤。
+- **主观正确性**：通常没有可直接比较的事实标准。
 
 ---
 
@@ -81,12 +81,12 @@ class LLMLogger:
         self.logger.info(json.dumps(log_entry))
 ```
 
-**What to log:**
-- Request ID for correlation
-- Model and parameters
-- Token counts
-- Latency (TTFT and total)
-- Content (hashed if privacy-sensitive)
+**需要记录的内容：**
+- 用于关联的请求 ID。
+- 模型和参数。
+- Token 数量。
+- 延迟（TTFT 和总延迟）。
+- 内容（涉及隐私时先做哈希）。
 
 ### 指标
 
@@ -138,7 +138,7 @@ quality_score = Gauge(
 
 ### Trace
 
-End-to-end tracing for RAG pipelines:
+对 RAG 流水线进行端到端追踪：
 
 ```python
 from opentelemetry import trace
@@ -180,34 +180,34 @@ async def rag_query(query: str) -> str:
 
 ### 运维指标
 
-| Metric | Description | Typical Alert Threshold |
+| 指标 | 说明 | 典型告警阈值 |
 |--------|-------------|------------------------|
-| Request rate | Requests per second | Anomaly detection |
-| Error rate | Failed requests / total | > 5% |
-| Latency p50 | Median response time | > 2s |
-| Latency p95 | 95th percentile | > 5s |
-| Latency p99 | 99th percentile | > 10s |
-| TTFT | Time to first token | > 1s |
-| Token throughput | Tokens per second | < baseline |
+| 请求率 | 每秒请求数 | 异常检测 |
+| 错误率 | 失败请求数 / 总请求数 | > 5% |
+| 延迟 p50 | 响应时间中位数 | > 2s |
+| 延迟 p95 | 第 95 百分位 | > 5s |
+| 延迟 p99 | 第 99 百分位 | > 10s |
+| TTFT | 首 Token 时间 | > 1s |
+| Token 吞吐 | 每秒 Token 数 | < 基线 |
 
 ### 质量指标
 
-| Metric | Description | Collection Method |
+| 指标 | 说明 | 收集方式 |
 |--------|-------------|-------------------|
-| Quality score | LLM-as-judge rating | Sampled (1-5%) |
-| Faithfulness | RAG answer grounded in context | Sampled |
-| Relevance | Answer addresses the question | Sampled |
-| User satisfaction | Thumbs up/down, ratings | User feedback |
-| Task completion | Did user achieve goal? | Implicit signals |
+| 质量分数 | LLM 评审评分 | 抽样（1～5%） |
+| 忠实度 | RAG 回答是否有上下文依据 | 抽样 |
+| 相关性 | 回答是否回应问题 | 抽样 |
+| 用户满意度 | 点赞/点踩、评分 | 用户反馈 |
+| 任务完成度 | 用户是否达成目标？ | 隐式信号 |
 
 ### 成本指标
 
-| Metric | Description | Granularity |
+| 指标 | 说明 | 粒度 |
 |--------|-------------|-------------|
-| Cost per request | Average cost | Per model |
-| Daily cost | Total daily spend | Overall + per model |
-| Cost per user action | Cost to complete user goal | Per task type |
-| Token efficiency | Value delivered per token | Per use case |
+| 单请求成本 | 平均成本 | 按模型 |
+| 每日成本 | 每日总支出 | 总体 + 按模型 |
+| 单次用户动作成本 | 完成用户目标的成本 | 按任务类型 |
+| Token 效率 | 每个 Token 交付的价值 | 按用例 |
 
 ---
 
@@ -410,12 +410,12 @@ alerts:
 
 ### 告警优先级
 
-| Severity | Response Time | Examples |
+| 严重级别 | 响应时间 | 示例 |
 |----------|---------------|----------|
-| Critical | < 15 min | Service down, > 50% error rate |
-| High | < 1 hour | > 10% error rate, P99 > 30s |
-| Warning | < 4 hours | Quality degradation, cost spike |
-| Info | Next business day | Trend changes, capacity planning |
+| 严重 | < 15 分钟 | 服务宕机、错误率 > 50% |
+| 高 | < 1 小时 | 错误率 > 10%、P99 > 30s |
+| 警告 | < 4 小时 | 质量下降、成本激增 |
+| 信息 | 下一个工作日 | 趋势变化、容量规划 |
 
 ---
 
@@ -423,13 +423,13 @@ alerts:
 
 ### LLM 专用工具
 
-| Tool | Focus | Best For |
+| 工具 | 重点 | 最适合 |
 |------|-------|----------|
-| LangSmith | LangChain tracing | LangChain-based apps |
-| Langfuse | Open source tracing | Self-hosted, privacy |
-| Weights & Biases | Experiment tracking | ML teams |
-| Arize Phoenix | LLM monitoring | Production monitoring |
-| Helicone | API proxy logging | Simple integration |
+| LangSmith | LangChain 追踪 | 基于 LangChain 的应用 |
+| Langfuse | 开源追踪 | 自托管、隐私要求高的场景 |
+| Weights & Biases | 实验跟踪 | ML 团队 |
+| Arize Phoenix | LLM 监控 | 生产监控 |
+| Helicone | API 代理日志 | 简单集成 |
 
 ### 集成示例：Langfuse
 
@@ -471,55 +471,55 @@ async def traced_rag_query(query: str) -> str:
 
 ## 面试问题
 
-### Q: What metrics would you track for a production LLM system?
+### Q：生产 LLM 系统需要跟踪哪些指标？
 
-**Strong answer:**
+**强回答：**
 
-"I organize metrics into three categories:
+“我会把指标分为三类：
 
-**Operational metrics:** These are table stakes for any service.
-- Request rate and error rate
-- Latency percentiles: p50, p95, p99
-- Time to first token (TTFT) for streaming
-- Availability
+**运维指标：**这些是任何服务都必须具备的基础指标。
+- 请求率和错误率。
+- 延迟百分位：p50、p95、p99。
+- 流式响应的首 Token 时间（TTFT）。
+- 可用性。
 
-**Quality metrics:** This is what makes LLM observability unique.
-- Sampled quality scores using LLM-as-judge (1-5% sample rate)
-- For RAG: faithfulness and relevance scores
-- User feedback: thumbs up/down, explicit ratings
-- Task completion rate where measurable
+**质量指标：**这是 LLM 可观测性的独特之处。
+- 使用 LLM 评审对请求抽样评分（抽样率 1～5%）。
+- 对 RAG 跟踪忠实度和相关性分数。
+- 用户反馈：点赞/点踩和明确评分。
+- 在可衡量时跟踪任务完成率。
 
-**Cost metrics:**
-- Cost per request by model
-- Daily/weekly cost trends
-- Cost per successful user action
-- Token efficiency
+**成本指标：**
+- 按模型统计单请求成本。
+- 每日/每周成本趋势。
+- 每次成功用户动作的成本。
+- Token 效率。
 
-I set alerts for operational issues (error rate > 5%, P95 > SLA) and quality drift (average score drops 10% from baseline). Cost alerts for spikes help catch runaway usage.
+我会为运维问题（错误率 > 5%、P95 超过 SLA）和质量漂移（平均分较基线下降 10%）设置告警。成本激增告警可以帮助发现失控的使用量。
 
-The key insight is that a fast, available LLM system producing bad outputs is still failing. Quality must be a first-class metric."
+关键洞见是：一个快速、可用但输出糟糕的 LLM 系统仍然是失败的。质量必须是一等指标。”
 
-### Q: How do you detect quality degradation in production?
+### Q：如何检测生产环境中的质量下降？
 
-**Strong answer:**
+**强回答：**
 
-"I use several approaches:
+“我会采用几种方式：
 
-**Continuous sampling:** I evaluate 1-5% of requests using LLM-as-judge. This gives me a quality signal without evaluating everything.
+**持续抽样：**使用 LLM 评审对 1～5% 的请求进行评估，在不评测全部请求的情况下获得质量信号。
 
-**Drift detection:** I maintain a baseline quality distribution and use statistical tests to detect when current scores drift significantly. A 10% degradation triggers a warning.
+**漂移检测：**维护质量分布基线，并使用统计检验发现当前分数是否显著偏移。质量下降 10% 时触发警告。
 
-**User feedback:** Thumbs up/down, explicit ratings if available. This is ground truth for user satisfaction.
+**用户反馈：**收集点赞/点踩以及可用的明确评分，这是用户满意度的事实标准。
 
-**Implicit signals:** Task completion, retry rate, escalation rate, session length. If users are struggling more, quality may have dropped.
+**隐式信号：**任务完成率、重试率、升级率和会话长度。如果用户更频繁地遇到困难，质量可能已经下降。
 
-**What to do when I detect degradation:**
-1. Check for recent deployments or prompt changes
-2. Sample specific responses to diagnose the issue
-3. Check if it is model-specific (provider issue) or universal
-4. Roll back if necessary, then investigate
+**检测到质量下降后的处理：**
+1. 检查近期部署或 Prompt 变更。
+2. 抽样具体回答以诊断问题。
+3. 确认问题是特定模型/供应商导致，还是普遍存在。
+4. 必要时回滚，再继续调查。
 
-I also maintain a golden test set of queries with expected behaviors that I run on every deployment to catch regressions before production."
+我还会维护一组带有预期行为的黄金测试查询，在每次部署时运行，以便在上线前发现回归。”
 
 ---
 

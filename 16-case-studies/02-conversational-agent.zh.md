@@ -1,79 +1,79 @@
 # 案例研究：客户支持对话 Agent
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-This case study walks through designing a production customer support agent for a B2B SaaS company.
+本案例演示如何为 B2B SaaS 公司设计生产级客服 Agent。
 
 ## 目录
 
-- [Problem Statement](#problem-statement)
-- [Requirements Analysis](#requirements-analysis)
-- [Architecture Design](#architecture-design)
-- [Component Deep Dives](#component-deep-dives)
-- [Reliability Patterns](#reliability-patterns)
-- [Evaluation and Monitoring](#evaluation-and-monitoring)
-- [Cost Analysis](#cost-analysis)
-- [Lessons Learned](#lessons-learned)
-- [Interview Walkthrough](#interview-walkthrough)
+- [问题陈述](#problem-statement)
+- [需求分析](#requirements-analysis)
+- [架构设计](#architecture-design)
+- [组件深入分析](#component-deep-dives)
+- [可靠性模式](#reliability-patterns)
+- [评测与监控](#evaluation-and-monitoring)
+- [成本分析](#cost-analysis)
+- [经验总结](#lessons-learned)
+- [面试演练](#interview-walkthrough)
 
 ---
 
-## Problem Statement
+## 问题陈述
 
-**Company:** B2B SaaS platform with 50K enterprise customers
+**公司：**拥有 5 万家企业客户的 B2B SaaS 平台
 
-**Current state:**
-- 500K support tickets per month
-- Average response time: 4 hours
-- Customer satisfaction (CSAT): 72%
-- Support team: 100 agents
+**现状：**
+- 每月 50 万张客服工单
+- 平均响应时间：4 小时
+- 客户满意度（CSAT）：72%
+- 客服团队：100 名坐席
 
-**Goal:**
-- Reduce response time to < 5 minutes for common queries
-- Improve CSAT to > 85%
-- Handle 60% of tickets without human intervention
-- Maintain quality for escalated tickets
+**目标：**
+- 将常见问题的响应时间降至 5 分钟以内
+- 将 CSAT 提升到 85% 以上
+- 让 60% 的工单无需人工介入即可处理
+- 保证升级工单的处理质量
 
 ---
 
-## Requirements Analysis
+## 需求分析
 
-### Functional Requirements
+### 功能需求
 
-| Requirement | Description | Priority |
+| 需求 | 描述 | 优先级 |
 |-------------|-------------|----------|
-| Query understanding | Classify intent, extract entities | P0 |
-| Knowledge retrieval | Search product docs, FAQs, past tickets | P0 |
-| Account context | Access user's subscription, history | P0 |
-| Response generation | Natural, accurate, helpful responses | P0 |
-| Conversation memory | Multi-turn context | P0 |
-| Action execution | Create tickets, trigger workflows | P1 |
-| Human escalation | Seamless handoff when needed | P0 |
-| Billing inquiries | Handle sensitive financial data | P1 |
+| 查询理解 | 分类意图、抽取实体 | P0 |
+| 知识检索 | 搜索产品文档、FAQ 和历史工单 | P0 |
+| 账户上下文 | 访问用户订阅信息和历史记录 | P0 |
+| 响应生成 | 自然、准确且有帮助的回复 | P0 |
+| 对话记忆 | 多轮上下文 | P0 |
+| 执行动作 | 创建工单、触发工作流 | P1 |
+| 转人工 | 需要时无缝交接 | P0 |
+| 账单咨询 | 处理敏感财务数据 | P1 |
 
-### Non-Functional Requirements
+### 非功能需求
 
-| Requirement | Target | Rationale |
+| 需求 | 目标 | 理由 |
 |-------------|--------|-----------|
-| Latency (TTFT) | < 1s | User expectation for chat |
-| Latency (full) | < 5s | Maintain engagement |
-| Availability | 99.9% | Business-critical |
-| Accuracy | > 95% | Customer trust |
-| Escalation rate | < 40% | Cost efficiency |
-| CSAT | > 85% | Business goal |
+| 延迟（TTFT） | < 1s | 符合聊天用户预期 |
+| 延迟（完整响应） | < 5s | 保持用户参与度 |
+| 可用性 | 99.9% | 业务关键指标 |
+| 准确率 | > 95% | 建立客户信任 |
+| 升级率 | < 40% | 控制成本 |
+| CSAT | > 85% | 业务目标 |
 
-### Security Requirements
+### 安全需求
 
-- No PII in logs
-- Tenant isolation (customers only see their data)
-- Audit trail for all actions
-- SOC 2 compliance
+- 日志中不得包含 PII
+- 租户隔离（客户只能看到自己的数据）
+- 所有动作都保留审计轨迹
+- 符合 SOC 2
 
 ---
 
-## Architecture Design
+## 架构设计
 
-### High-Level Architecture
+### 高层架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -105,7 +105,7 @@ This case study walks through designing a production customer support agent for 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Rendered as a layered flow. The orchestration layer dispatches to three parallel context sources, then assembles them in the response generator:
+将其表示为分层流程：编排层把请求分发到三个并行上下文源，再由响应生成器汇总：
 
 ```mermaid
 flowchart TD
@@ -129,7 +129,7 @@ flowchart TD
     AT --> RG
 ```
 
-### Conversation Flow
+### 对话流程
 
 ```
 User Message
@@ -174,7 +174,7 @@ User Message
     Response / Escalation
 ```
 
-A turn is a state machine. The two gates that matter for cost and trust are *safety* (must pass before leaving the system) and *confidence* (decides escalation vs auto-reply):
+每一轮对话都是一个状态机。对成本和信任最重要的两个闸门是*安全性*（离开系统前必须通过）和*置信度*（决定升级还是自动回复）：
 
 ```mermaid
 stateDiagram-v2
@@ -198,9 +198,9 @@ stateDiagram-v2
 
 ---
 
-## Component Deep Dives
+## 组件深入分析
 
-### Intent Classification (Dec 2025)
+### 意图分类（2025 年 12 月）
 
 ```python
 class IntentClassifier:
@@ -214,7 +214,7 @@ class IntentClassifier:
         return json.loads(result.choices[0].message.content)
 ```
 
-### Knowledge Base (Gemini 3 Flash RAG)
+### 知识库（Gemini 3 Flash RAG）
 
 ```python
 class SupportKnowledgeBase:
@@ -225,7 +225,7 @@ class SupportKnowledgeBase:
         return results
 ```
 
-### Response Generation (Claude Sonnet 4.6)
+### 响应生成（Claude Sonnet 4.6）
 
 ```python
 class ResponseGenerator:
@@ -243,13 +243,13 @@ class ResponseGenerator:
 ```
 
 > [!NOTE]
-> **Production Wisdom:** While Gemini 3 Flash is great for high-volume retrieval, **Claude 3.5 Sonnet** remains the most "stable" generator for many support teams who have spent months fine-tuning guardrails around its specific personality and refusal patterns.
+> **生产经验：**Gemini 3 Flash 很适合高吞吐检索，但对许多已经花数月围绕特定性格和拒答模式微调防护栏的客服团队来说，**Claude 3.5 Sonnet** 仍然是最“稳定”的生成器。
 
 ---
 
 ## 可靠性模式
 
-### Confidence-Based Escalation
+### 基于置信度的升级
 
 ```python
 class EscalationHandler:
@@ -294,7 +294,7 @@ class EscalationHandler:
         return any(kw in message.lower() for kw in sensitive_keywords)
 ```
 
-The escalation decision combines three independent signals. Any one of them triggers handoff. Visualizing it as a decision tree makes the OR semantics obvious and easy to extend with a fourth signal:
+升级决策结合三个独立信号，任一信号都能触发转人工。用决策树展示后，或逻辑一目了然，也便于增加第四个信号：
 
 ```mermaid
 flowchart TD
@@ -311,7 +311,7 @@ flowchart TD
     E --> H[Queue for Human Agent<br/>with context bundle]
 ```
 
-### Multi-Turn Memory
+### 多轮记忆
 
 ```python
 class ConversationMemory:
@@ -350,7 +350,7 @@ class ConversationMemory:
 
 ---
 
-## Evaluation and Monitoring
+## 评测与监控
 
 ### 质量指标
 
@@ -381,94 +381,94 @@ class QualityMonitor:
             metrics.record(f"quality_{criterion}", score)
 ```
 
-### Dashboard Metrics
+### 仪表盘指标
 
-| Metric | Target | Actual |
+| 指标 | 目标 | 实际 |
 |--------|--------|--------|
-| Latency (TTFT) | < 1s | 0.8s |
-| Latency (full) | < 5s | 3.2s |
-| Accuracy | > 95% | 94.3% |
-| Escalation rate | < 40% | 38% |
+| 延迟（TTFT） | < 1s | 0.8s |
+| 延迟（完整响应） | < 5s | 3.2s |
+| 准确率 | > 95% | 94.3% |
+| 升级率 | < 40% | 38% |
 | CSAT | > 85% | 87% |
-| Resolution rate | > 60% | 62% |
+| 解决率 | > 60% | 62% |
 
 ---
 
-## Cost Analysis
+## 成本分析
 
-### Per-Conversation Cost Breakdown (Dec 2025)
+### 单次对话成本拆解（2025 年 12 月）
 
-| Component | Cost | Notes |
+| 组件 | 成本 | 说明 |
 |-----------|------|-------|
-| Intent classification | $0.0001 | GPT-5.5-mini ($0.10/1M) |
-| RAG retrieval | $0.0001 | Gemini 3 Flash ($0.05/1M) |
-| Thinking mode | $0.0050 | Claude Sonnet 4.6 Thinking (avg 250 tokens) |
-| Response generation | $0.0030 | Claude Sonnet 4.6 ($3/1M in) |
-| Quality sampling | $0.0001 | 5% sample rate on GPT-5.5 |
-| **Total** | **~$0.0083** | **Per conversation (62% reduction vs 2024)** |
+| 意图分类 | $0.0001 | GPT-5.5-mini（$0.10/1M） |
+| RAG 检索 | $0.0001 | Gemini 3 Flash（$0.05/1M） |
+| 思考模式 | $0.0050 | Claude Sonnet 4.6 Thinking（平均 250 Token） |
+| 响应生成 | $0.0030 | Claude Sonnet 4.6（输入 $3/1M） |
+| 质量抽样 | $0.0001 | GPT-5.5 抽样率 5% |
+| **合计** | **约 $0.0083** | **每次对话（相比 2024 年下降 62%）** |
 
-### Monthly Cost Projection
+### 月度成本预测
 
-| Item | Calculation | Cost |
+| 项目 | 计算 | 成本 |
 |------|-------------|------|
-| Conversations | 500K × $0.022 | $11,000 |
-| Infrastructure | Fixed | $2,000 |
-| Human escalations | 190K × $5 (human cost) | $950,000 |
-| **Total** | | $963,000 |
-| **Savings vs all-human** | 500K × $5 - $963K | $1.5M/year |
+| 对话数 | 500K × $0.022 | $11,000 |
+| 基础设施 | 固定 | $2,000 |
+| 人工升级 | 190K × $5（人工成本） | $950,000 |
+| **合计** | | $963,000 |
+| **相比全人工的节省** | 500K × $5 - $963K | $1.5M/年 |
 
 ---
 
-## Lessons Learned
+## 经验总结
 
-### What Worked
+### 有效做法
 
-1. **Intent-based routing** reduced latency by focusing retrieval on relevant sources
-2. **Confidence-based escalation** maintained quality while reducing human load
-3. **Account context** made responses more personalized and accurate
-4. **Lower temperature (0.3)** improved consistency for support responses
+1. **基于意图的路由**通过只检索相关来源降低了延迟
+2. **基于置信度的升级**在降低人工负载的同时维持了质量
+3. **账户上下文**让回复更加个性化和准确
+4. **较低的温度（0.3）**提升了客服回复的一致性
 
-### What Did Not Work Initially
+### 初期无效做法
 
-1. **Single model for everything** - routing to different models for different tasks improved quality
-2. **Too high escalation threshold** - started at 0.9 confidence, causing too many escalations
-3. **Full conversation history** - exceeded context limits, switched to summarization
+1. **所有任务使用同一个模型**——为不同任务路由到不同模型后，质量得到提升
+2. **升级阈值过高**——初始置信度阈值为 0.9，导致升级过多
+3. **保留完整对话历史**——超出上下文限制后改用摘要
 
-### Recommendations
+### 建议
 
-1. Start with high escalation rate and lower gradually as confidence improves
-2. Monitor CSAT by escalation reason to identify weak areas
-3. Retrain embeddings on support-specific vocabulary
-4. Build feedback loop: agents tag escalated conversations for training data
+1. 先接受较高的升级率，随着置信度提升逐步降低
+2. 按升级原因监控 CSAT，识别薄弱环节
+3. 使用客服领域词汇重新训练嵌入模型
+4. 建立反馈闭环：由人工坐席标注升级对话，沉淀训练数据
 
 ---
 
-## Interview Walkthrough
+## 面试演练
 
-**Interviewer:** "Design an AI customer support system for a SaaS company."
+**面试官：**“为 SaaS 公司设计一个 AI 客服系统。”
 
-**Strong response pattern:**
+**强回答模式：**
 
-1. **Clarify requirements** (2 min)
-   - "What's the ticket volume? What channels? What's the current CSAT?"
+1. **澄清需求**（2 分钟）
+   - “工单量是多少？有哪些渠道？当前 CSAT 是多少？”
 
-2. **State constraints explicitly**
-   - "Key constraints: accuracy over speed, seamless escalation, tenant isolation"
+2. **明确陈述约束**
+   - “关键约束是：准确性优先于速度、无缝升级、租户隔离。”
 
-3. **High-level architecture** (3 min)
-   - Draw the flow: intent → routing → RAG → generation → safety → response/escalation
+3. **高层架构**（3 分钟）
+   - 画出流程：意图 → 路由 → RAG → 生成 → 安全 → 回复/升级
 
-4. **Deep dive on critical component** (5 min)
-   - "Let me detail the confidence-based escalation..."
+4. **深入关键组件**（5 分钟）
+   - “下面详细说明基于置信度的升级……”
 
-5. **Address reliability** (3 min)
-   - "For reliability, I would use self-consistency for billing queries, multi-provider fallback"
+5. **说明可靠性**（3 分钟）
+   - “为提高可靠性，账单查询使用自一致性，多供应商之间配置故障转移。”
 
-6. **Metrics and monitoring** (2 min)
-   - "Key metrics: CSAT, resolution rate, escalation rate, accuracy sampling"
+6. **指标与监控**（2 分钟）
+   - “关键指标包括 CSAT、解决率、升级率和准确率抽样结果。”
 
-7. **Cost consideration** (1 min)
-   - "At 500K conversations/month, cost per conversation matters. Model routing helps."
+7. **成本考量**（1 分钟）
+   - “每月 50 万次对话时，单次对话成本很重要；模型路由可以帮助控制成本。”
 
 ---
 
@@ -479,4 +479,4 @@ class QualityMonitor:
 
 ---
 
-*Next: [Code Assistant Case Study](04-code-assistant.md)*
+*下一篇：[代码助手案例研究](04-code-assistant.md)*

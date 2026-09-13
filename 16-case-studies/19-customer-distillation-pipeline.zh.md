@@ -2,21 +2,21 @@
 
 本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
 
-A Series-B AI product cuts frontier-model spend from $50K per month to $4 to 6K by distilling a 7B student model on 6 months of production traces, with a 3-month payback and a 4 to 6 month re-distillation cadence.
+一家 B 轮 AI 产品通过使用 6 个月生产轨迹蒸馏 7B 学生模型，将前沿模型支出从每月 5 万美元降至 4000～6000 美元，回本期 3 个月，每 4～6 个月重新蒸馏一次。
 
-## The Business Problem
+## 业务问题
 
-A scaled AI product (about 8M user requests per month) runs on a frontier model. The cost line crossed $50K per month in early 2026, growth is 18 percent quarter over quarter, and finance asked for a plan. The team had one clean realization: roughly 90 percent of production traffic falls into a small number of recurring task patterns (intent classification, structured extraction, document summarization, three categories of triage). A frontier model is overkill for these; a much smaller model fine-tuned on the frontier's own outputs can serve them at a fraction of the cost.
+一个规模化 AI 产品（每月约 800 万用户请求）运行在前沿模型上。2026 年初成本超过每月 5 万美元，环比增长 18%，财务要求制定方案。团队发现约 90% 的生产流量属于少数重复任务模式（意图分类、结构化抽取、文档摘要和三类分流）。这些任务不需要前沿模型；在前沿模型自身输出上微调更小的模型，就能以极低成本提供服务。
 
-Constraints from the May 2026 reality:
+2026 年 5 月的现实约束：
 
-- $50K per month frontier-model spend, growing
-- Latency budget: under 350 ms p95 for the high-volume tasks
-- Quality bar: less than 2 percent regression on the customer's golden set
-- Compliance: customer data cannot leave a specific cloud region
-- Headcount: 1 ML engineer plus part-time platform support
+- 每月 5 万美元的前沿模型支出，且仍在增长
+- 延迟预算：高流量任务 p95 低于 350ms
+- 质量标准：客户黄金集上的回归低于 2%
+- 合规：客户数据不得离开指定云区域
+- 人员：1 名 ML 工程师加兼职平台支持
 
-The distillation pattern is mature: DistilBERT ([Sanh et al., 2019](https://arxiv.org/abs/1910.01108)), TinyBERT, Alpaca-style instruction distillation ([Taori et al., 2023](https://github.com/tatsu-lab/stanford_alpaca)), and more recent work on chain-of-thought distillation ([Hsieh et al., 2023](https://arxiv.org/abs/2305.02301)) all show that a 7 to 13B student can recover 92 to 98 percent of teacher performance on focused tasks. Frontier-lab FDE teams (Anthropic Field Engineering, OpenAI Solutions) have publicly walked through the budget math in conference talks; the numbers below are aligned with what those teams quote to customers.
+模型蒸馏模式已经成熟：DistilBERT（[Sanh 等，2019](https://arxiv.org/abs/1910.01108)）、TinyBERT、Alpaca 风格指令蒸馏（[Taori 等，2023](https://github.com/tatsu-lab/stanford_alpaca)）以及近期的思维链蒸馏工作（[Hsieh 等，2023](https://arxiv.org/abs/2305.02301)）都表明，在聚焦任务上，7B～13B 学生模型可以恢复教师模型 92%～98% 的表现。前沿实验室的 FDE 团队（Anthropic Field Engineering、OpenAI Solutions）也在会议演讲中公开讲解过预算计算，下面的数字与这些团队对客户引用的数字一致。
 
 ## 架构
 
@@ -48,102 +48,102 @@ flowchart LR
     end
 ```
 
-### Components
+### 组件
 
-| Layer | Tech | Purpose |
+| 层 | 技术 | 用途 |
 |-------|------|---------|
-| Teacher | Frontier model (Claude Opus 4.7 or equivalent) | Source of labels |
-| Student | Llama 4 7B int4 or Qwen 3.6 7B | Production serving |
-| Trace store | S3 plus Langfuse | Sampling and replay |
-| Trainer | DeepSpeed plus FSDP on 8x H100 | One-week training run |
-| Eval | Per-task golden set, on-call paged on regression | Quality gate |
-| Serving | vLLM with FP8 | 350 ms p95 |
+| 教师 | 前沿模型（Claude Opus 4.7 或同等模型） | 标签来源 |
+| 学生 | Llama 4 7B int4 或 Qwen 3.6 7B | 生产服务 |
+| 轨迹存储 | S3 + Langfuse | 抽样和重放 |
+| 训练器 | 8 个 H100 上的 DeepSpeed + FSDP | 一周训练运行 |
+| 评测 | 每任务黄金集，出现回归时通知值班人员 | 质量闸门 |
+| 服务 | 带 FP8 的 vLLM | p95 350ms |
 
-### Data flow
+### 数据流
 
-1. Six months of production traces accumulate in Langfuse plus S3.
-2. The sampler pulls stratified samples by task category, with rebalancing to ensure rare categories are represented.
-3. The teacher (frontier model) generates target outputs for each sample, often with chain-of-thought reasoning traces if the task benefits from reasoning distillation.
-4. A 5 percent human spot-check by domain experts catches teacher mistakes; we apply rejection sampling, keeping only pairs where human reviewers agree with the teacher.
-5. The student is fine-tuned for about 1 week on 8x H100 (~$22K compute), producing a 7B model.
-6. The model passes per-task evals, runs in shadow against production for 2 weeks, then gradual rollout: 5 percent, 20 percent, 50 percent, 90 percent over 3 weeks, with auto-rollback wired to live quality metrics.
+1. 六个月的生产轨迹累积在 Langfuse 和 S3 中。
+2. 抽样器按任务类别分层抽样，并重新平衡以确保低频类别有代表性。
+3. 教师模型（前沿模型）为每个样本生成目标输出；如果任务适合推理蒸馏，通常也会生成思维链推理轨迹。
+4. 领域专家对 5% 样本做人工抽查，捕获教师错误；我们执行拒绝采样，只保留人工审核员与教师意见一致的样本对。
+5. 学生模型在 8 个 H100 上微调约 1 周（计算成本约 $22K），生成一个 7B 模型。
+6. 模型通过每任务评测后，与生产流量影子运行 2 周，再在 3 周内逐步发布到 5%、20%、50%、90%，并将自动回滚接入实时质量指标。
 
-## Key Design Decisions
+## 关键设计决策
 
 ### 1. Distill on real production traces, not synthetic data
 
-The temptation is to generate synthetic prompts via an LLM and label them with the teacher. We tried this; it produces a model that excels at synthetic prompts and degrades 4 to 7 points on real traffic. Production traces capture the distribution shift, oddities, and tail cases that matter. We collect 6 months of traces, sample stratified by task category, and use real prompts as the distillation source. This aligns with the practice frontier labs' FDE teams recommend.
+人们很容易用 LLM 生成合成 Prompt，再由教师模型标注。我们尝试过这种方式，但得到的模型只擅长合成 Prompt，在真实流量上下降 4～7 分。生产轨迹能捕获真正重要的分布偏移、异常和尾部案例。我们收集 6 个月轨迹，按任务类别分层抽样，并使用真实 Prompt 作为蒸馏来源，这与前沿实验室 FDE 团队的实践建议一致。
 
 ### 2. Reject-sample with human spot-check
 
-Teacher errors propagate into the student. A 92 percent teacher precision becomes a 90 percent student precision if you train on every teacher output. We have a 5 percent human spot-check on a random sample of teacher labels, and we reject pairs where the human disagrees. This catches roughly 4 percent of labels and lifts the final student's quality by 2 to 4 points on our composite metric. Cost: about $1,800 in human labeling per re-distillation, on top of compute.
+教师错误会传播给学生模型。如果使用教师的每一个输出训练，92% 的教师精确率可能变成学生 90% 的精确率。我们对教师标签的随机样本做 5% 人工抽查，人工不同意的样本对直接拒绝。这能捕获约 4% 的标签，并使学生模型在综合指标上的最终质量提升 2～4 分。每次重新蒸馏的人工标注成本约 $1800，另加计算成本。
 
 ### 3. Chain-of-thought distillation where it pays
 
-For reasoning-heavy tasks (the triage category in our case), we use Hsieh et al.'s [distillation with rationales](https://arxiv.org/abs/2305.02301) approach: the teacher emits both the answer and a reasoning trace; the student is trained to emit both. This gives the student structured thinking it would not develop from input-output pairs alone. We do not use this for classification or extraction tasks (no gain, extra latency).
+对于推理密集任务（本案例中的分诊类别），我们采用 Hsieh 等人的[带理由蒸馏](https://arxiv.org/abs/2305.02301)方法：教师同时输出答案和推理轨迹，学生也训练为同时输出二者。这样能赋予学生模型仅靠输入输出样本无法形成的结构化思考能力。分类或抽取任务不使用该方法，因为没有收益且会增加延迟。
 
 ### 4. Eval-set construction with human labeling
 
-Our eval set is curated separately from the training set. It contains 1,800 cases across the high-volume task categories, labeled by 3 domain experts with majority vote. We re-label 200 cases every quarter to track distribution drift. The eval set is the gating signal for canary rollout; a 2-point regression on the composite blocks production deployment. We never look at eval-set examples during training-data sampling.
+我们的评测集与训练集分开整理，包含高流量任务类别中的 1800 个案例，由 3 名领域专家以多数票标注。我们每季度重新标注 200 个案例，以跟踪分布漂移。评测集是 Canary 发布的闸门信号；综合指标回归 2 分就阻止生产部署。训练数据抽样时绝不查看评测集样本。
 
 ### 5. Canary rollout and shadow traffic
 
-Even with eval passing, production has tail behavior the eval set misses. Our rollout:
+即使评测通过，生产环境仍可能存在评测集漏掉的尾部行为。我们的发布流程是：
 
-- Week 1: shadow traffic only, no user impact. We compare student vs teacher outputs on 100 percent of traffic, with a delta classifier flagging divergences for human review.
-- Week 2: 5 percent live traffic. Auto-rollback if any of (a) latency p95 exceeds 500 ms, (b) live user thumbs-up rate drops more than 1 point, (c) a domain-specific guardrail trips at higher rate.
-- Week 3: 20 percent. Same guardrails.
-- Week 4: 50 percent.
-- Week 5: 90 percent. 10 percent permanently routes to the teacher for ongoing trace collection and re-distillation.
+- 第 1 周：仅影子流量，不影响用户。对 100% 流量比较学生与教师输出，由差异分类器标记分歧并交人工复核。
+- 第 2 周：5% 真实流量。满足以下任一条件就自动回滚：(a) 延迟 p95 超过 500ms；(b) 实时用户点赞率下降超过 1 分；(c) 某领域防护栏触发率升高。
+- 第 3 周：20% 流量，使用相同防护栏。
+- 第 4 周：50% 流量。
+- 第 5 周：90% 流量。永久保留 10% 流量路由到教师模型，用于持续收集轨迹和重新蒸馏。
 
-This conservative ramp has caught two regressions in the past year that the eval set missed.
+过去一年，这种保守的逐步放量捕获了两次评测集未发现的回归。
 
 ### 6. Re-distillation cadence
 
-The world drifts. New product features change task distributions; users learn new behaviors; the teacher itself improves with new model releases. We re-distill every 4 to 6 months. The pipeline is partially automated: trace sampling, teacher labeling, and training are scripted; human spot-check and eval review still need a person. Each re-distillation costs about $26K all-in ($22K compute, $1,800 labeling, plus overhead) and takes 4 to 6 weeks.
+世界会发生漂移。新产品功能改变任务分布，用户形成新行为，教师模型也会随新版本改进。我们每 4～6 个月重新蒸馏一次。流水线部分自动化：轨迹抽样、教师标注和训练通过脚本完成；人工抽查和评测复核仍需要人。每次重新蒸馏全包成本约 $26K（$22K 计算、$1800 标注及额外开销），耗时 4～6 周。
 
-### 7. When distillation does NOT make sense
+### 7. 不适合蒸馏的情况
 
-Distillation is not always right. Signals against:
+蒸馏并不总是正确选择，以下信号说明不适合使用：
 
-- Traffic is low volume (under 200K requests per month). The payback never materializes.
-- Tasks are highly variable. If every request is unique, the student cannot learn a useful distribution.
-- The teacher itself is unstable or rapidly evolving. Re-distilling against a moving target wastes effort.
-- Quality bar is very tight (over 99 percent fidelity required). The distillation gap is real; if you cannot tolerate it, stick with the teacher.
+- 流量较低（每月低于 20 万请求），无法实现回本。
+- 任务变化高度频繁。如果每个请求都独一无二，学生无法学到有用分布。
+- 教师模型本身不稳定或变化太快。对移动目标反复蒸馏会浪费精力。
+- 质量标准极严（要求超过 99% 忠实度）。蒸馏差距是真实存在的，不能接受时就继续使用教师模型。
 
-We use a quick-screen heuristic: at least 60 percent of traffic falls into 5 or fewer task patterns, and monthly spend on those tasks exceeds $20K. If both fail, we pass on distillation.
+我们使用一个快速筛选启发式条件：至少 60% 流量属于不超过 5 种任务模式，且这些任务的月度支出超过 $20K。两项都不满足时放弃蒸馏。
 
-### 8. Quantization choice
+### 8. 量化选择
 
-We serve the 7B student in int4 (GPTQ via vLLM with FP8 KV cache). int4 cuts memory roughly 4x and improves throughput by about 2.3x on H100 vs FP16. We measured an accuracy hit of 0.4 points on our composite, well within tolerance. We considered int8 (smaller hit, smaller speedup) and FP8 (less mature ecosystem); int4 won on cost-per-request.
+我们以 int4 提供 7B 学生模型服务（通过 vLLM 使用 GPTQ，并采用 FP8 KV Cache）。相比 FP16，int4 大约节省 4 倍内存，在 H100 上吞吐量提升约 2.3 倍。我们测得综合准确率下降 0.4 分，完全在容忍范围内。我们还考虑过 int8（损失更小但加速也更小）和 FP8（生态不够成熟），最终 int4 的单请求成本最低。
 
-### 9. Privacy considerations on training data
+### 9. 训练数据的隐私考量
 
-Production traces contain user PII by definition. Before training we run a redaction pass: a fine-tuned NER model flags PII spans, and we replace them with category tokens (`[EMAIL]`, `[PERSON_NAME]`). The student learns the structural patterns without memorizing specific identities. The redaction model itself is evaluated on a labeled sample with precision over 98 percent and recall over 95 percent.
+生产轨迹按定义包含用户 PII。训练前我们执行脱敏流程：微调后的 NER 模型标记 PII 片段，并替换为类别 Token（`[EMAIL]`、`[PERSON_NAME]`）。学生模型学习结构模式，而不会记忆具体身份。脱敏模型本身在带标签样本上评测，精确率超过 98%，召回率超过 95%。
 
-## Cost and Payback
+## 成本与回本
 
-| Line item | Amount |
+| 项目 | 金额 |
 |-----------|--------|
-| Trace collection (6 months) | Already paid as part of observability spend |
-| Teacher labeling (about 800K pairs) | $42K one-time |
-| Human spot-check | $8K one-time |
-| Compute (8x H100 for 1 week, plus retries) | $32K one-time |
-| Eval set curation | $14K one-time |
-| Platform engineering (overhead) | $24K one-time |
-| **Total upfront** | **$120K** |
+| 轨迹收集（6 个月） | 已包含在可观测性支出中 |
+| 教师标注（约 80 万对） | 一次性 $42K |
+| 人工抽查 | 一次性 $8K |
+| 计算（8 个 H100 运行 1 周，加重试） | 一次性 $32K |
+| 评测集整理 | 一次性 $14K |
+| 平台工程（额外开销） | 一次性 $24K |
+| **前期合计** | **$120K** |
 
-| Monthly run-rate | Before | After |
+| 月度运行成本 | 之前 | 之后 |
 |------------------|--------|-------|
-| Frontier model (10 percent of traffic, plus re-distillation harness) | $50K | $5K |
-| Student model serving (vLLM on dedicated H100s) | $0 | $1,200 |
-| **Monthly total** | **$50K** | **$6.2K** |
+| 前沿模型（10% 流量，加重新蒸馏 Harness） | $50K | $5K |
+| 学生模型服务（专用 H100 上的 vLLM） | $0 | $1200 |
+| **月度合计** | **$50K** | **$6.2K** |
 
-Monthly savings: roughly $44K. Payback: 120K / 44K, about 2.7 months. We round to "3-month payback" for finance.
+每月节省约 $44K。回本期为 120K / 44K，约 2.7 个月；对财务部门取整为“3 个月回本”。
 
-Re-distillation costs $26K every 5 months on average, which we amortize against the same savings line. Net annual savings: about $470K.
+重新蒸馏平均每 5 个月花费 $26K，我们从同一节省项中摊销。年度净节省约 $470K。
 
-## Distillation Pipeline
+## 蒸馏流水线
 
 ```mermaid
 flowchart TD
@@ -164,85 +164,85 @@ flowchart TD
     N --> O[90pct Student 10pct Teacher]
 ```
 
-## Failure Modes and Mitigations
+## 失败模式与缓解措施
 
-### F1: Teacher upgrade renders student stale
+### F1：教师模型升级使学生模型过时
 
-The frontier-model vendor releases a new generation, the teacher quality jumps, and our student now underperforms users' expectations relative to what the rest of the market ships. Mitigation: we monitor a comparative eval of teacher vs student monthly; when the gap exceeds 4 points, we accelerate the re-distillation calendar. Re-distilling against a stronger teacher is straightforward; the pipeline is the same.
+前沿模型供应商发布新一代模型，教师质量跃升，学生模型相对于市场其他产品无法满足用户预期。缓解措施是每月监控教师与学生的对比评测；差距超过 4 分时提前重新蒸馏。针对更强教师重新蒸馏很直接，流水线不变。
 
-### F2: Distribution shift between training and serving
+### F2：训练与服务之间的分布偏移
 
-A new product feature changes user behavior overnight (a notification campaign drives unusual queries, a new pricing tier shifts user types). The student's training distribution no longer matches production. Mitigation: an online drift monitor flags when the input embedding distribution moves more than a threshold; if drift is structural, we trigger an emergency re-distillation; if transient, we route the affected slice to the teacher.
+新产品功能可能在一夜之间改变用户行为（通知活动带来异常查询，新价格层改变用户类型），使学生训练分布不再匹配生产环境。缓解措施是在线漂移监控器检测输入嵌入分布是否超过阈值；结构性漂移触发紧急重新蒸馏，暂时性漂移则将受影响流量路由到教师模型。
 
-### F3: Teacher hallucinations baked into student
+### F3：教师幻觉被固化到学生模型
 
-The teacher occasionally hallucinates; reject sampling catches most but not all. The student then hallucinates more confidently because the pattern is in the training distribution. Mitigation: a faithfulness check on the eval set; any growth in hallucination rate over baseline triggers a re-cleanup of training data.
+教师偶尔会产生幻觉；拒绝采样能捕获大多数但不是全部错误。由于这种模式进入训练分布，学生模型可能更自信地出现幻觉。缓解措施是在评测集上做忠实度检查；幻觉率相对基线增长就重新清洗训练数据。
 
-### F4: Cost regression from over-routing to teacher
+### F4：过度路由到教师模型导致成本回归
 
-The 10 percent teacher fallback creeps up as engineers add fallbacks for various edge cases. Mitigation: budget alarm on teacher spend; quarterly audit of fallback routes; each fallback rule requires justification and an expiry.
+随着工程师为各种边界情况增加回退逻辑，10% 的教师回退比例逐渐上升。缓解措施是为教师支出设置预算告警；每季度审计回退路由；每条回退规则都必须有理由和到期时间。
 
-### F5: Canary rollout misses a tail regression
+### F5：Canary 发布漏掉尾部回归
 
-The eval set and shadow traffic both look fine, but 5 percent live exposes a regression that hurts a specific customer segment. Mitigation: per-segment quality metrics on live traffic with auto-rollback per segment; we segmentation-watch by customer tier, by language, and by task category.
+评测集和影子流量都正常，但 5% 真实流量暴露了伤害某个客户群体的回归。缓解措施是对真实流量按分群计算质量指标，并支持按分群自动回滚；分群维度包括客户等级、语言和任务类别。
 
-### F6: Compliance violation: training data residency
+### F6：合规违规——训练数据驻留
 
-The customer's contract requires data residency in a specific region; our default training compute is in a different region. Mitigation: we maintain region-local training capacity; per-customer training data is bound to the customer's region; we never copy raw traces outside the region. The orchestrator refuses to launch a job that would violate residency.
+客户合同要求数据驻留在指定区域，而默认训练计算位于其他区域。缓解措施是维护区域本地训练容量，将每个客户的训练数据绑定到其区域，绝不把原始轨迹复制到区域外。编排器会拒绝启动违反驻留要求的任务。
 
-### F7: Catastrophic forgetting on rarely-seen tasks
+### F7：罕见任务上的灾难性遗忘
 
-The student forgets a category it saw only twice in training. Mitigation: stratified sampling guarantees minimum coverage of rare categories; the eval suite explicitly includes rare-category cases; the canary rollout monitors per-category quality separately.
+学生模型忘记了训练中只见过两次的类别。缓解措施是分层抽样保证罕见类别的最低覆盖；评测套件明确包含罕见类别案例；Canary 发布按类别单独监控质量。
 
-### F8: Cost-tracking failure across teacher and student
+### F8：教师与学生之间的成本跟踪失败
 
-Some queries are routed both to the student and the teacher (during shadow); cost accounting double-counts unless explicit. Mitigation: cost tags on every call (shadow, primary, fallback) with a daily reconciliation report that catches mis-tagged traffic.
+部分查询在影子阶段同时路由到学生和教师；如果不明确区分，成本核算会重复计费。缓解措施是为每次调用添加成本标签（影子、主路由、回退），并生成每日对账报告捕获错误标记的流量。
 
-## Operational Considerations
+## 运维考虑
 
 ### Monitoring
 
-| SLO | Target |
+| SLO | 目标 |
 |-----|--------|
-| Student p95 latency | under 350 ms |
-| Quality delta vs teacher (corrected) | within 2 points |
-| Teacher fallback rate | 10 percent target, alert at over 15 percent |
-| Cost per 1K requests | under 30 percent of pre-distillation |
-| Re-distillation cadence | every 4 to 6 months |
+| 学生模型 p95 延迟 | 低于 350ms |
+| 相对教师的质量差异（校正后） | 2 分以内 |
+| 教师回退率 | 目标 10%，超过 15% 告警 |
+| 每 1000 请求成本 | 低于蒸馏前的 30% |
+| 重新蒸馏周期 | 每 4～6 个月 |
 
 ### Cost model
 
-Monthly steady-state: $6.2K serving plus amortized re-distillation ($5.2K per month). Compared to $50K teacher-only, savings of about $38K per month after full amortization. Annualized: ~$456K saved net.
+月度稳定状态成本：$6.2K 服务成本，加上摊销后的重新蒸馏成本（每月 $5.2K）。与只使用教师模型的 $50K 相比，完全摊销后每月节省约 $38K，年度净节省约 $456K。
 
 ### On-call playbook
 
-- Quality regression alarm: confirm with a manual eval-set replay; if real, route the affected segment to teacher until next training cycle; open a priority ticket.
-- Cost overrun: check fallback routes; if traffic patterns shifted, schedule re-distillation; throttle if needed.
-- Latency spike: check GPU utilization; if a noisy neighbor, isolate the student node.
-- Drift alarm: check input embedding histograms; if drift is large and persistent, trigger emergency re-distillation.
-- Eval-set leak: if a held-out eval case is found in training data, retire the case immediately and run a deduplication pass; refresh the eval set within the quarter.
+- 质量回归告警：用人工重放评测集确认；若是真实回归，将受影响分群路由到教师模型直到下一训练周期，并创建高优先级工单。
+- 成本超支：检查回退路由；如果流量模式发生变化，安排重新蒸馏，必要时限流。
+- 延迟尖峰：检查 GPU 利用率；如果存在噪声邻居，隔离学生模型节点。
+- 漂移告警：检查输入嵌入直方图；漂移大且持续时触发紧急重新蒸馏。
+- 评测集泄露：如果在训练数据中发现留出评测案例，立即废弃该案例并执行去重；在本季度内刷新评测集。
 
 ### Comparative eval cadence
 
-Once per month we run a comparative eval: a 500-case sample, student vs teacher, scored by the LLM-as-judge plus a 50-case human sample. The output is a single dashboard tile that the AI team owns. A widening gap is the early warning that re-distillation is needed.
+每月运行一次对比评测：抽取 500 个案例比较学生与教师，由 LLM-as-judge 评分，并另取 50 个案例人工评审。结果以一个仪表盘卡片呈现，由 AI 团队负责。差距扩大是需要重新蒸馏的早期预警。
 
 ### Re-distillation ritual
 
-When a re-distillation is scheduled, we follow a 4-week ritual: week 1, sample fresh traces and label with the current teacher; week 2, train and evaluate; week 3, shadow traffic; week 4, gradual rollout. The full ritual is checklisted; the ML engineer runs it solo with platform support for the gradual-rollout phase.
+安排重新蒸馏后，我们遵循 4 周流程：第 1 周抽取新轨迹并用当前教师标注；第 2 周训练和评测；第 3 周影子流量；第 4 周逐步发布。完整流程有检查清单，由 ML 工程师独立执行，平台团队支持逐步放量阶段。
 
 ### Customer-facing communication
 
-When we move a customer's traffic to a distilled student, we tell them. The customer-facing wording: "Your high-volume queries are now served by a model we fine-tuned on your traffic, optimized for latency and cost. Eval evidence in your quarterly report shows quality is within 2 points of the frontier baseline." Most customers do not care as long as quality holds; a few (financial services, healthcare) require explicit signoff and we route those queries through the teacher unless they opt in.
+当我们把客户流量切换到蒸馏后的学生模型时，会向客户说明。面向客户的措辞是：“您的高流量查询现在由基于贵方流量微调的模型处理，该模型针对延迟和成本进行了优化。季度报告中的评测证据表明，质量与前沿基线相差不超过 2 分。”只要质量保持，大多数客户并不在意；少数金融服务和医疗客户要求明确签字同意，在他们主动选择前，我们会把这些查询路由到教师模型。
 
-## What Strong Interview Candidates Cover
+## 优秀面试候选人应覆盖的内容
 
-- They make the budget math explicit and front-load the conversation: upfront cost, payback period, ongoing re-distillation cost.
-- They cite distillation papers by name (DistilBERT, Alpaca, distillation with rationales) and use the language of "student", "teacher", and "rejection sampling".
-- They explain why production traces beat synthetic data, and why human spot-check on teacher labels matters.
-- They walk through canary rollout with concrete percentages and auto-rollback gates; they name the regression types that shadow-only traffic misses.
-- They say where distillation does NOT help, demonstrating they have done this and not just read about it.
-- They handle the teacher-upgrade scenario: when frontier improves, the gap to student widens, and re-distillation is the fix.
-- They include privacy work (PII redaction in training data) as part of the pipeline, not as an afterthought.
+- 明确计算预算并提前讨论：前期成本、回本期和持续重新蒸馏成本。
+- 能说出蒸馏论文名称（DistilBERT、Alpaca、带理由蒸馏），并正确使用“学生”“教师”“拒绝采样”等术语。
+- 解释生产轨迹为何优于合成数据，以及教师标签人工抽查为何重要。
+- 用具体百分比和自动回滚闸门讲清 Canary 发布，并指出仅影子流量无法发现的回归类型。
+- 说明蒸馏在哪些地方**没有帮助**，证明自己做过实践而非只读过资料。
+- 处理教师升级场景：前沿模型变强后，学生差距扩大，重新蒸馏就是解决方案。
+- 将隐私工作（训练数据中的 PII 脱敏）作为流水线的一部分，而不是事后补丁。
 
 ## 参考资料
 
@@ -259,4 +259,4 @@ When we move a customer's traffic to a distilled student, we tell them. The cust
 - [DeepSpeed for training](https://www.deepspeed.ai/training/)
 - [Together AI distillation case study](https://www.together.ai/blog/distillation)
 
-Related chapters: [Fine-Tuning and Distillation](../03-training-and-adaptation/05-knowledge-distillation.md), [Inference Optimization](../04-inference-optimization/01-inference-fundamentals.md), [Cost Management](../04-inference-optimization/07-cost-optimization-playbook.md).
+相关章节：[微调与蒸馏](../03-training-and-adaptation/05-knowledge-distillation.md)、[推理优化](../04-inference-optimization/01-inference-fundamentals.md)、[成本管理](../04-inference-optimization/07-cost-optimization-playbook.md)。

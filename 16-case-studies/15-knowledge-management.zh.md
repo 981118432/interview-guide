@@ -1,27 +1,27 @@
 # 案例研究：企业知识管理
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-## The Problem
+## 问题
 
-A consulting firm with **10,000 employees** has decades of project reports, methodology documents, and expertise scattered across SharePoint, Confluence, and file shares. They want an AI system where consultants can ask "How did we approach supply chain optimization for automotive clients?" and get answers synthesized from internal knowledge.
+一家拥有**1 万名员工**的咨询公司，有数十年的项目报告、方法论文档和专业经验，分散在 SharePoint、Confluence 和文件共享中。他们希望构建 AI 系统，让顾问可以询问“我们如何为汽车客户做供应链优化”，并从内部知识中综合答案。
 
-**Constraints given in the interview:**
-- 2 million documents across 15 data sources
-- Access control: associates cannot see partner-level content
-- Must cite sources for every claim
-- Stale data handling: old methodologies should not override new ones
-- Knowledge gaps should be identified, not hallucinated
-
----
-
-## The Interview Question
-
-> "Design an internal knowledge assistant where a junior consultant can ask questions and get answers based only on documents they're authorized to see."
+**面试中给出的约束：**
+- 15 个数据源中的 200 万份文档。
+- 访问控制：助理不能查看合伙人级别内容。
+- 每个声明都必须引用来源。
+- 处理陈旧数据：旧方法不能覆盖新方法。
+- 应识别知识缺口，而不是编造答案。
 
 ---
 
-## Solution Architecture
+## 面试题
+
+> “设计一个内部知识助手，让初级顾问提问时只能根据其获授权查看的文档得到答案。”
+
+---
+
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -56,11 +56,11 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Permission-Aware Retrieval
+### 1. 权限感知检索
 
-**Answer:** Every chunk carries its permission metadata from the source system:
+**回答：**每个分块都从源系统继承权限元数据：
 
 ```python
 chunk = {
@@ -75,7 +75,7 @@ chunk = {
 }
 ```
 
-At query time, we filter before retrieval:
+查询时先过滤，再进行检索：
 
 ```python
 def search(query: str, user: User):
@@ -89,9 +89,9 @@ def search(query: str, user: User):
     )
 ```
 
-### 2. Recency-Weighted Ranking
+### 2. 按新近度加权排名
 
-**Answer:** A 2024 methodology document should rank higher than a 2019 one for the same topic. We use a **decay function**:
+**回答：**对于同一主题，2024 年方法论文档的排名应高于 2019 年文档。我们使用**衰减函数**：
 
 ```python
 def recency_boost(doc_date):
@@ -102,11 +102,11 @@ def recency_boost(doc_date):
 final_score = semantic_score * 0.7 + recency_boost(doc.date) * 0.3
 ```
 
-This prevents outdated practices from drowning out current guidance.
+这样可以防止过时实践淹没当前指导。
 
-### 3. Knowledge Gap Detection
+### 3. 知识缺口检测
 
-**Answer:** We must distinguish "I found nothing" from "I'm making something up":
+**回答：**必须区分“没有找到信息”和“正在编造信息”：
 
 ```python
 def generate_answer(query: str, retrieved_docs: list):
@@ -124,7 +124,7 @@ def generate_answer(query: str, retrieved_docs: list):
 
 ---
 
-## Multi-Source Synchronization
+## 多源同步
 
 ```mermaid
 flowchart LR
@@ -147,13 +147,13 @@ flowchart LR
     end
 ```
 
-**Key insight:** SharePoint and Confluence support change tokens (delta sync). File shares require hash comparison. Both feed into a unified processing queue.
+**关键洞见：**SharePoint 和 Confluence 支持变更令牌（增量同步），文件共享需要哈希比较，两者最终都进入统一处理队列。
 
 ---
 
-## Handling Conflicting Information
+## 处理冲突信息
 
-Different documents may have conflicting guidance. We surface this:
+不同文档可能包含冲突指导，我们会显式呈现冲突：
 
 ```python
 def detect_conflicts(retrieved_docs):
@@ -174,43 +174,43 @@ def detect_conflicts(retrieved_docs):
 
 ---
 
-## Cost Analysis
+## 成本分析
 
-| Component | Monthly Cost |
+| 组件 | 月成本 |
 |-----------|--------------|
-| Embedding (2M docs × updates) | $500 |
-| Vector DB (Pinecone Enterprise) | $2,000 |
-| LLM generation (50K queries) | $3,000 |
-| Sync infrastructure (connectors) | $500 |
+| 嵌入（200 万文档 × 更新） | $500 |
+| 向量数据库（Pinecone Enterprise） | $2,000 |
+| LLM 生成（5 万次查询） | $3,000 |
+| 同步基础设施（连接器） | $500 |
 | **Total** | **$6,000/month** |
 
-ROI: Consultants save an average of 2 hours/week searching for information. At 10,000 consultants × $100/hour × 2 hours × 4 weeks = $8M/month in productivity. System pays for itself 1,300x over.
+ROI：顾问平均每周节省 2 小时信息搜索时间。按 1 万名顾问 × 100 美元/小时 × 2 小时 × 4 周计算，每月生产力收益为 800 万美元，系统收益约为成本的 1300 倍。
 
 ---
 
-## Interview Follow-Up Questions
+## 面试追问
 
-**Q: How do you handle documents with mixed permissions?**
+**问：如何处理包含混合权限的文档？**
 
-A: We chunk at the section level, and each section inherits the most restrictive permission from its ancestors. A paragraph in a "confidential" section within an otherwise "internal" document is tagged "confidential."
+答：我们按章节切块，每个章节继承祖先节点中最严格的权限。普通“内部”文档中的“机密”章节里的段落，也会标记为“机密”。
 
-**Q: What about real-time collaboration documents (Google Docs, live Confluence pages)?**
+**问：如何处理实时协作文档（Google Docs、实时 Confluence 页面）？**
 
-A: We have a separate "live document" pipeline with more frequent sync (every 5 minutes vs daily for static files). These documents are flagged as "draft" in search results until they are finalized.
+答：我们为“实时文档”单独建立流水线，以更高频率同步（每 5 分钟一次，而静态文件每天同步）。文档定稿前，在搜索结果中标记为“草稿”。
 
-**Q: How do you prevent the system from becoming a leaky abstraction for unauthorized data?**
+**问：如何防止系统成为未授权数据的泄露抽象？**
 
-A: We never include unauthorized content in the LLM context, even to say "I cannot show you this." The system behaves as if unauthorized documents do not exist. This prevents inference attacks where users probe "do you have info about X?" to discover the existence of confidential projects.
-
----
-
-## Key Takeaways for Interviews
-
-1. **Permissions must be enforced at retrieval, not generation**: filter before the LLM sees content
-2. **Recency weighting prevents stale knowledge**: old documents decay in relevance
-3. **Admit gaps instead of hallucinating**: confidence thresholds and fallback messaging
-4. **Multi-source sync is complex**: different APIs need different strategies
+答：我们从不把未授权内容放进 LLM 上下文，即使只是为了说“我不能展示这部分”。系统表现得就像未授权文档不存在，从而防止用户通过“你们有 X 的信息吗？”这类探测推断机密项目是否存在。
 
 ---
 
-*Related chapters: [RAG Fundamentals](../06-retrieval-systems/01-rag-fundamentals.md), [Multi-Tenant Isolation](../12-security-and-access/02-access-control.md)*
+## 面试关键要点
+
+1. **权限必须在检索阶段而非生成阶段执行**：在 LLM 看到内容前就过滤。
+2. **新近度加权防止知识陈旧**：旧文档的相关性随时间衰减。
+3. **承认缺口而不是产生幻觉**：使用置信度阈值和回退消息。
+4. **多源同步很复杂**：不同 API 需要不同策略。
+
+---
+
+*相关章节：[RAG 基础](../06-retrieval-systems/01-rag-fundamentals.md)、[多租户隔离](../12-security-and-access/02-access-control.md)*

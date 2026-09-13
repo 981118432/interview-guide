@@ -1,24 +1,22 @@
 # 护栏与安全
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
-
-Guardrails are systems that constrain LLM behavior to ensure safe, reliable outputs and prevent unsafe actions. This chapter covers input validation, output filtering, prompt injection defense, action safety, hallucination mitigation, and reliability patterns for production systems.
+护栏是约束 LLM 行为的系统，用于确保输出安全可靠并阻止不安全动作。本章覆盖输入校验、输出过滤、Prompt 注入防御、动作安全、幻觉缓解以及生产系统的可靠性模式。
 
 ## 目录
 
-- [Why Guardrails Matter](#why-guardrails-matter)
-- [Types of Guardrails](#types-of-guardrails)
-- [Input Guardrails](#input-guardrails)
-- [Output Guardrails](#output-guardrails)
-- [Prompt Injection Defense](#prompt-injection-defense)
-- [Hallucination Mitigation](#hallucination-mitigation)
-- [Structured Output Validation](#structured-output-validation)
-- [Action Safety](#action-safety)
-- [Fallback Strategies](#fallback-strategies)
-- [Guardrail Architecture](#guardrail-architecture)
-- [Guardrail Frameworks](#guardrail-frameworks)
-- [Interview Questions](#interview-questions)
-- [References](#references)
+- [为什么需要护栏](#why-guardrails-matter)
+- [护栏类型](#types-of-guardrails)
+- [输入护栏](#input-guardrails)
+- [输出护栏](#output-guardrails)
+- [Prompt 注入防御](#prompt-injection-defense)
+- [幻觉缓解](#hallucination-mitigation)
+- [结构化输出校验](#structured-output-validation)
+- [动作安全](#action-safety)
+- [回退策略](#fallback-strategies)
+- [护栏架构](#guardrail-architecture)
+- [护栏框架](#guardrail-frameworks)
+- [面试问题](#interview-questions)
+- [参考资料](#references)
 
 ---
 
@@ -26,24 +24,24 @@ Guardrails are systems that constrain LLM behavior to ensure safe, reliable outp
 
 ### 可靠性挑战
 
-LLMs are probabilistic and can produce:
-- Factually incorrect information (hallucination)
-- Harmful or inappropriate content
-- Off-topic or unhelpful responses
-- Inconsistent formatting
-- Leaked sensitive information
+LLM 是概率系统，可能产生：
+- 事实错误的信息（幻觉）。
+- 有害或不适当内容。
+- 偏题或没有帮助的回答。
+- 不一致的格式。
+- 泄露敏感信息。
 
 ### 风险类别
 
-| Risk | Description | Impact |
+| 风险 | 说明 | 影响 |
 |------|-------------|--------|
-| Harmful content | Violence, hate, illegal activities | Legal liability, reputation damage |
-| PII exposure | Leaking personal information | Privacy violations, fines |
-| Prompt injection | Malicious instruction override | Security breach |
-| Hallucination | False information presented as fact | User harm, trust erosion, liability |
-| Unsafe actions | Executing dangerous operations | System damage, data loss |
-| Off-topic responses | Irrelevant answers | Poor user experience |
-| Format errors | Invalid output structure | Application crashes |
+| 有害内容 | 暴力、仇恨、非法活动 | 法律责任、声誉损害 |
+| PII 暴露 | 泄露个人信息 | 侵犯隐私、罚款 |
+| Prompt 注入 | 恶意指令覆盖 | 安全漏洞 |
+| 幻觉 | 将错误信息当作事实 | 用户受损、信任下降、责任风险 |
+| 不安全动作 | 执行危险操作 | 系统损坏、数据丢失 |
+| 偏题回答 | 无关回答 | 用户体验差 |
+| 格式错误 | 输出结构无效 | 应用崩溃 |
 
 ---
 
@@ -93,7 +91,7 @@ User Input
 
 ### 主题分类
 
-Block off-topic or prohibited requests:
+拦截偏题或被禁止的请求：
 
 ```python
 class TopicGuardrail:
@@ -131,7 +129,7 @@ result = guardrail.check("How do I cook pasta?")
 
 ### PII 检测
 
-Detect and handle personally identifiable information:
+检测并处理个人身份信息：
 
 ```python
 class PIIGuardrail:
@@ -253,7 +251,7 @@ def check_with_openai(text: str) -> GuardrailResult:
 
 ### 相关性检查
 
-Ensure response addresses the question:
+确保回答确实回应问题：
 
 ```python
 class RelevanceGuardrail:
@@ -487,7 +485,7 @@ class HallucinationGuard:
 
 ### 拒答策略
 
-Train the model to say "I don't know":
+训练模型在不知道时说“我不知道”：
 
 ```python
 ABSTENTION_PROMPT = """
@@ -706,9 +704,9 @@ class SandboxedExecutor:
 
 ---
 
-## Fallback Strategies
+## 回退策略
 
-### Graceful Degradation
+### 优雅降级
 
 ```python
 class FallbackChain:
@@ -746,7 +744,7 @@ fallback = FallbackChain([
 ])
 ```
 
-### Human Escalation
+### 转人工
 
 ```python
 class HumanEscalationGuardrail:
@@ -778,9 +776,9 @@ def handle_low_confidence(query: str, response: str, metadata: dict):
 
 ---
 
-## Guardrail Architecture
+## 护栏架构
 
-### Layered Pipeline
+### 分层流水线
 
 ```python
 class GuardrailPipeline:
@@ -841,7 +839,7 @@ class GuardrailPipeline:
         )
 ```
 
-### Guardrail Metrics
+### 护栏指标
 
 ```python
 class GuardrailMetrics:
@@ -872,7 +870,7 @@ class GuardrailMetrics:
 
 ---
 
-## Guardrail Frameworks
+## 护栏框架
 
 ### NeMo Guardrails (NVIDIA)
 
@@ -934,96 +932,96 @@ result = guard(
 
 ### Q: How do you prevent hallucination in a production RAG system?
 
-**Strong answer:**
-Multi-layer approach:
+**强回答：**
+采用多层方法：
 
-**1. Retrieval quality:**
-- High-quality retrieval is the first defense
-- If we retrieve wrong context, model will hallucinate
-- Use reranking to ensure relevance
+**1. 检索质量：**
+- 高质量检索是第一道防线。
+- 如果检索到错误上下文，模型就会产生幻觉。
+- 使用重排序确保相关性。
 
-**2. Prompt engineering:**
-- Explicit instruction: "Answer only from context"
-- Encourage abstention: "If not in context, say you don't know"
-- Low temperature (0.1-0.3)
+**2. Prompt 工程：**
+- 明确指令：“只能根据上下文回答”。
+- 鼓励拒答：“上下文中没有就说不知道”。
+- 使用低温度（0.1～0.3）。
 
-**3. Output validation:**
-- Factuality checking: NLI model or LLM judge
-- Citation verification: Check claims against sources
-- Self-consistency: Multiple samples should agree
+**3. 输出校验：**
+- 事实性检查：NLI 模型或 LLM 评审。
+- 引用验证：将陈述与来源比较。
+- 自洽性：多个样本应相互一致。
 
-**4. Abstention strategy:**
-- Train/prompt model to say "I don't know"
-- Detect low-confidence responses
-- Escalate to human when uncertain
+**4. 拒答策略：**
+- 训练或提示模型说“我不知道”。
+- 检测低置信度回答。
+- 不确定时升级人工。
 
-**5. Monitoring:**
-- Track hallucination rate in production
-- User feedback on accuracy
-- Regular evaluation on test set
+**5. 监控：**
+- 跟踪生产环境幻觉率。
+- 收集用户对准确性的反馈。
+- 定期在测试集上评测。
 
-### Q: How do you protect an LLM application from prompt injection?
+### Q：如何保护 LLM 应用免受 Prompt 注入？
 
-**Strong answer:**
+**强回答：**
 
-"Defense in depth with multiple layers:
+“采用多层纵深防御：
 
-**Detection:**
-- Pattern matching for known injection phrases ('ignore previous instructions')
-- ML classifier trained on injection examples
-- Anomaly detection for unusual input patterns
+**检测：**
+- 匹配已知注入短语（如“忽略之前的指令”）。
+- 使用注入样本训练的 ML 分类器。
+- 对异常输入模式做异常检测。
 
-**Mitigation:**
-- Sandwich defense: wrap user input with instruction reminders
-- Clear delimiters: use unique markers around user content
-- Input/output isolation: summarize intent before acting on it
-- Parameterization: separate data from instructions (like SQL params)
+**缓解：**
+- 三明治防御：用指令提醒包裹用户输入。
+- 清晰分隔符：用唯一标记包住用户内容。
+- 输入/输出隔离：先总结意图，再执行动作。
+- 参数化：像 SQL 参数一样分离数据与指令。
 
-**Architecture:**
-- Least privilege: agents only have permissions they need
-- Action validation: verify actions before execution
-- Output filtering: catch responses that leak system prompts
+**架构：**
+- 最小权限：Agent 只拥有所需权限。
+- 动作校验：执行前验证动作。
+- 输出过滤：捕获泄露 System Prompt 的回答。
 
-No single defense is perfect. The goal is that an attacker needs to bypass multiple layers. I also monitor for injection attempts to update defenses.
+没有单一防御是完美的，目标是让攻击者必须绕过多层控制；同时监控注入尝试以持续更新防御。
 
-For high-security applications, I use a two-stage approach: first LLM extracts intent without acting, second LLM acts only on the extracted intent."
+对于高安全要求应用，我采用两阶段方式：第一个 LLM 只提取意图、不执行动作；第二个 LLM 只能根据提取出的意图行动。”
 
-### Q: Design a guardrail system for a customer service chatbot.
+### Q：设计一个客服聊天机器人的护栏系统。
 
-**Strong answer:**
-I would implement guardrails at input and output:
+**强回答：**
+我会在输入和输出两侧都实施护栏：
 
-**Input guardrails:**
-1. Topic filter: Only allow product/service questions
-2. PII detection: Redact or warn about sensitive data
-3. Jailbreak/injection detection: Block manipulation attempts
-4. Rate limiting: Prevent abuse
+**输入护栏：**
+1. 主题过滤：只允许产品或服务相关问题。
+2. PII 检测：对敏感数据脱敏，或向用户发出警告。
+3. 越狱/注入检测：阻止操纵系统的尝试。
+4. 限流：防止滥用。
 
-**Output guardrails:**
-1. Content safety: No harmful/inappropriate content
-2. Relevance check: Response addresses the question
-3. Brand voice: Consistent tone and messaging
-4. Factuality: Claims supported by knowledge base
-5. PII filter: Ensure no PII leaks in responses
+**输出护栏：**
+1. 内容安全：不产生有害或不当内容。
+2. 相关性检查：回答必须回应用户问题。
+3. 品牌语气：保持一致的语气和表述。
+4. 事实性：所有声明都应由知识库支持。
+5. PII 过滤：确保回答不泄露 PII。
 
-**Behavioral guardrails:**
-- Confidence thresholds: escalate to human if uncertain
-- Refusal patterns: graceful decline for out-of-scope requests
-- Disclosure: clearly identify as AI when appropriate
+**行为护栏：**
+- 置信度阈值：不确定时升级人工处理。
+- 拒答模式：对范围外请求进行得体拒绝。
+- 信息披露：在适当场景明确说明自己是 AI。
 
-**Fallback chain:**
+**回退链：**
 ```
 Primary LLM -> Backup LLM -> Canned responses -> Human escalation
 ```
 
-**Monitoring:**
-- Log all guardrail triggers
-- Track guardrail trigger rates
-- Alert on high block rates (may indicate attack or model issue)
-- Sample blocked conversations for review
-- User satisfaction tracking
+**监控：**
+- 记录所有护栏触发事件。
+- 跟踪护栏触发率。
+- 阻断率过高时告警（可能意味着攻击或模型问题）。
+- 抽样检查被阻断的对话。
+- 跟踪用户满意度。
 
-The balance is: enough guardrails to be safe, not so many that the bot is useless. Tune thresholds based on the risk profile -- financial services tighter than casual chat.
+关键是取得平衡：护栏要足够保障安全，但不能多到让机器人失去可用性。应根据风险画像调整阈值——金融服务场景要比闲聊场景更严格。
 
 ---
 

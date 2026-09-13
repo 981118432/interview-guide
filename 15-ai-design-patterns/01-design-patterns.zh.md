@@ -1,18 +1,18 @@
 # AI 设计模式
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-This chapter catalogs common patterns for building AI systems, similar to design patterns in software engineering. Each pattern includes when to use it, implementation guidance, and tradeoffs.
+本章整理构建 AI 系统时常见的模式，类似于软件工程中的设计模式。每个模式都说明适用场景、实现建议和权衡。
 
 ## 目录
 
-- [RAG Patterns](#rag-patterns)
-- [Agent Patterns](#agent-patterns)
-- [Optimization Patterns](#optimization-patterns)
-- [Reliability Patterns](#reliability-patterns)
-- [Cost Patterns](#cost-patterns)
-- [Interview Questions](#interview-questions)
-- [References](#references)
+- [RAG 模式](#rag-patterns)
+- [Agent 模式](#agent-patterns)
+- [优化模式](#optimization-patterns)
+- [可靠性模式](#reliability-patterns)
+- [成本模式](#cost-patterns)
+- [面试问题](#interview-questions)
+- [参考资料](#references)
 
 ---
 
@@ -20,27 +20,27 @@ This chapter catalogs common patterns for building AI systems, similar to design
 
 ### 模式：朴素 RAG
 
-The simplest RAG implementation:
+最简单的 RAG 实现：
 
 ```
 Query → Embed → Search → Top K → Stuff into prompt → Generate
 ```
 
-**When to use:**
-- MVP and prototyping
-- Simple question-answering
-- When retrieval quality is sufficient
+**适用场景：**
+- MVP 和原型开发。
+- 简单问答。
+- 检索质量已经足够时。
 
-**Limitations:**
-- No reranking
-- No query enhancement
-- May retrieve irrelevant chunks
+**局限：**
+- 没有重排序。
+- 没有查询增强。
+- 可能检索到不相关分块。
 
 ---
 
 ### 模式：高级 RAG
 
-Enhanced pipeline with multiple stages:
+包含多个阶段的增强流水线：
 
 ```
 Query → Rewrite → Embed → Hybrid Search → Rerank → Filter → Generate
@@ -67,16 +67,16 @@ class AdvancedRAG:
         return await self.generate(user_query, context)
 ```
 
-**When to use:**
-- Production systems
-- When accuracy matters
-- Complex document sets
+**适用场景：**
+- 生产系统。
+- 对准确性要求高时。
+- 文档集合复杂时。
 
 ---
 
 ### 模式：父子检索
 
-Retrieve small chunks, return larger parent chunks:
+检索小分块，但返回更大的父分块：
 
 ```
 Document
@@ -107,16 +107,16 @@ class ParentChildRetriever:
         return parents
 ```
 
-**When to use:**
-- Need precision in retrieval
-- Need context in generation
-- Document structure is hierarchical
+**适用场景：**
+- 需要精确检索时。
+- 生成阶段需要更多上下文时。
+- 文档结构具有层次性时。
 
 ---
 
 ### 模式：Self-RAG
 
-Model decides when and what to retrieve:
+由模型决定何时检索以及检索什么：
 
 ```python
 class SelfRAG:
@@ -144,16 +144,16 @@ class SelfRAG:
         return response
 ```
 
-**When to use:**
-- Mixed knowledge (parametric + retrieved)
-- Want model to be selective
-- Research and experimentation
+**适用场景：**
+- 参数知识与检索知识混合。
+- 希望模型有选择地检索。
+- 研究和实验。
 
 ---
 
 ### 模式：纠错 RAG（CRAG）
 
-Evaluate and correct retrieval quality:
+评估并修正检索质量：
 
 ```python
 class CorrectiveRAG:
@@ -186,10 +186,10 @@ class CorrectiveRAG:
         return await self.generate(user_query, context)
 ```
 
-**When to use:**
-- Unreliable document corpus
-- Need high accuracy
-- Can afford latency for quality checks
+**适用场景：**
+- 文档语料库不可靠。
+- 需要高准确率。
+- 能够为质量检查承担额外延迟。
 
 ---
 
@@ -197,24 +197,24 @@ class CorrectiveRAG:
 
 ### 模式：ReAct
 
-Interleaved reasoning and acting:
+交替进行推理与行动：
 
 ```
 Thought → Action → Observation → Thought → Action → Observation → Answer
 ```
 
-See [Agent Architectures](../07-agentic-systems/01-agent-fundamentals.md) for implementation.
+实现方式请参阅 [Agent 架构](../07-agentic-systems/01-agent-fundamentals.md)。
 
-**When to use:**
-- General-purpose agents
-- Explainable decision making
-- Moderate complexity tasks
+**适用场景：**
+- 通用 Agent。
+- 需要可解释的决策过程。
+- 中等复杂度任务。
 
 ---
 
 ### 模式：计划与执行
 
-Create a plan first, then execute steps:
+先创建计划，再执行各个步骤：
 
 ```python
 class PlanAndExecuteAgent:
@@ -250,16 +250,16 @@ class PlanAndExecuteAgent:
         return await self.llm.generate(prompt)
 ```
 
-**When to use:**
-- Complex multi-step tasks
-- Need visibility into plan
-- Tasks benefit from decomposition
+**适用场景：**
+- 复杂的多步任务。
+- 需要查看计划。
+- 任务适合拆解。
 
 ---
 
 ### 模式：批评器/验证器
 
-One agent generates, another critiques:
+一个 Agent 生成结果，另一个进行批评：
 
 ```python
 class CriticPattern:
@@ -283,16 +283,16 @@ class CriticPattern:
         return response
 ```
 
-**When to use:**
-- Quality is critical
-- Can afford extra latency
-- Tasks have clear success criteria
+**适用场景：**
+- 质量至关重要。
+- 能够承担额外延迟。
+- 任务有明确成功标准。
 
 ---
 
 ### 模式：分层 Agent
 
-Manager delegates to specialist workers:
+管理者将任务委派给专业工作 Agent：
 
 ```python
 class ManagerAgent:
@@ -317,10 +317,10 @@ class ManagerAgent:
         return await self.synthesize(task, results)
 ```
 
-**When to use:**
-- Complex tasks spanning domains
-- Different tools per subtask
-- Parallelization opportunities
+**适用场景：**
+- 跨多个领域的复杂任务。
+- 不同子任务需要不同工具。
+- 存在并行化机会。
 
 ---
 
@@ -328,7 +328,7 @@ class ManagerAgent:
 
 ### 模式：模型级联
 
-Route to cheapest sufficient model:
+将请求路由到满足要求的最低成本模型：
 
 ```python
 class ModelCascade:
@@ -351,16 +351,16 @@ class ModelCascade:
             return await self.call_model("claude-3.5-sonnet", query)
 ```
 
-**When to use:**
-- High query volume
-- Variable query complexity
-- Cost optimization priority
+**适用场景：**
+- 查询量很高。
+- 查询复杂度差异大。
+- 成本优化优先。
 
 ---
 
 ### 模式：推测执行
 
-Draft with small model, verify with large:
+用小模型生成草稿，再用大模型验证：
 
 ```python
 class SpeculativeExecution:
@@ -389,16 +389,16 @@ class SpeculativeExecution:
         return "".join(output)
 ```
 
-**When to use:**
-- Latency-critical applications
-- Have aligned draft model
-- Predictable generation patterns
+**适用场景：**
+- 对延迟敏感的应用。
+- 有对齐良好的草稿模型。
+- 生成模式可预测。
 
 ---
 
 ### 模式：缓存层
 
-Multi-level caching strategy:
+多级缓存策略：
 
 ```python
 class CachingLLM:
@@ -427,10 +427,10 @@ class CachingLLM:
         return response
 ```
 
-**When to use:**
-- Repeated similar queries
-- Cost reduction priority
-- Can tolerate some staleness
+**适用场景：**
+- 反复出现相似查询。
+- 成本降低优先。
+- 可以容忍一定陈旧性。
 
 ---
 
@@ -496,7 +496,7 @@ class CircuitBreaker:
 
 ### 模式：舱壁
 
-Isolate failures between components:
+隔离组件之间的故障：
 
 ```python
 class BulkheadExecutor:
@@ -566,39 +566,39 @@ async def generate_response(query: str):
 
 ## 面试问题
 
-### Q: Describe three RAG patterns and when to use each.
+### Q：描述三种 RAG 模式，并说明各自的适用场景。
 
-**Strong answer:**
+**强回答：**
 
-"I will describe Naive RAG, Advanced RAG, and Parent-Child Retrieval.
+“我会介绍朴素 RAG、高级 RAG 和父子检索。
 
-**Naive RAG** is the simplest: embed query, search vectors, stuff top K into prompt, generate. I use this for MVPs and when retrieval quality is already good. It is fast to implement but has no reranking or query enhancement.
+**朴素 RAG** 最简单：对查询做嵌入、搜索向量、将 Top K 结果填入 Prompt 并生成。我会在 MVP 或检索质量已经足够好时使用它。它实现快，但没有重排序和查询增强。
 
-**Advanced RAG** adds multiple stages: query rewriting, hybrid search (semantic + keyword), reranking, and filtering. I use this in production when accuracy matters. The additional latency (100-200ms for reranking) is worth it for the 10-15% precision improvement.
+**高级 RAG** 增加多个阶段：查询改写、混合搜索（语义 + 关键词）、重排序和过滤。生产中对准确性有要求时我会使用它；为了 10～15% 的精确率提升，额外 100～200ms 的重排序延迟通常值得。
 
-**Parent-Child Retrieval** embeds small chunks for precise matching but returns larger parent chunks for context. I use this when documents have structure and I need both precision in retrieval and sufficient context for generation.
+**父子检索**对小分块做嵌入以实现精确匹配，但返回更大的父分块作为上下文。当文档有结构、同时需要检索精度和生成上下文时，我会使用它。
 
-The pattern I choose depends on the accuracy requirements, latency budget, and document characteristics. I often start with Naive RAG to establish a baseline, then iterate to Advanced RAG."
+具体模式取决于准确性要求、延迟预算和文档特征。我通常先用朴素 RAG 建立基线，再迭代到高级 RAG。”
 
-### Q: What reliability patterns would you use for a production LLM system?
+### Q：生产 LLM 系统会采用哪些可靠性模式？
 
-**Strong answer:**
+**强回答：**
 
-"I implement multiple layers of reliability:
+“我会实现多层可靠性机制：
 
-**Retry with exponential backoff** for transient failures. Rate limits and temporary errors are common with LLM APIs.
+对临时故障使用**指数退避重试**。LLM API 经常遇到限流和临时错误。
 
-**Multi-provider fallback** so if OpenAI is having issues, I automatically route to Anthropic or Google. This requires abstracting the LLM interface.
+使用**多供应商回退**：如果 OpenAI 出现问题，就自动路由到 Anthropic 或 Google。这要求抽象 LLM 接口。
 
-**Circuit breaker** to stop hammering a failing service. After N failures, I open the circuit and route to fallback immediately, giving the primary time to recover.
+使用**熔断器**停止持续冲击故障服务。连续失败 N 次后打开熔断，立即路由到回退服务，为主服务恢复留出时间。
 
-**Graceful degradation** when all providers fail. Return cached responses, show fallback messages, or queue for later processing rather than erroring.
+所有供应商都失败时进行**优雅降级**：返回缓存回答、展示回退消息或排队稍后处理，而不是直接报错。
 
-**Bulkhead isolation** to prevent one component's failures from cascading. Agent workloads get separate thread pools from RAG workloads.
+使用**舱壁隔离**避免一个组件的失败级联。Agent 工作负载与 RAG 工作负载使用独立线程池。
 
-**Timeouts** at every level. LLM calls can hang; I set aggressive timeouts and handle them gracefully.
+每一层都设置**超时**。LLM 调用可能挂起，因此要设置积极的超时时间并优雅处理。
 
-The key is assuming failures will happen and designing for them rather than hoping they will not."
+关键是预设故障一定会发生并围绕故障设计，而不是寄希望于故障永远不会发生。”
 
 ---
 
@@ -610,4 +610,4 @@ The key is assuming failures will happen and designing for them rather than hopi
 
 ---
 
-*Next: [Anti-Patterns to Avoid](02-anti-patterns.md)*
+*下一篇：[需要避免的反模式](02-anti-patterns.md)*

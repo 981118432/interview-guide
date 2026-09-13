@@ -1,27 +1,27 @@
 # 案例研究：实时欺诈检测
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-## The Problem
+## 问题
 
-A payment processor handles **10 million transactions per day**. They need to detect fraudulent transactions in real-time, blocking them before they complete, while minimizing false positives that frustrate legitimate customers.
+一家支付处理商每天处理**1000 万笔交易**。他们需要实时识别欺诈交易，在完成前阻止，同时尽量减少令正常客户沮丧的误报。
 
-**Constraints given in the interview:**
-- Decision latency: under 100ms
-- False positive rate: under 0.1% (1 in 1,000)
-- Must explain why a transaction was flagged
-- Regulations require 7-year audit trail
-- Fraud patterns evolve constantly
-
----
-
-## The Interview Question
-
-> "Design a system that decides within 100ms whether to approve, reject, or escalate a credit card transaction, and can explain that decision."
+**面试中给出的约束：**
+- 决策延迟低于 100ms。
+- 误报率低于 0.1%（每 1000 笔最多 1 笔）。
+- 必须解释交易被标记的原因。
+- 法规要求保留 7 年审计轨迹。
+- 欺诈模式持续演化。
 
 ---
 
-## Solution Architecture
+## 面试题
+
+> “设计一个能在 100ms 内决定批准、拒绝或升级信用卡交易，并能解释该决策的系统。”
+
+---
+
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -53,23 +53,23 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Why ML + Rules, Not Just ML?
+### 1. 为什么采用 ML + 规则，而不是只用 ML？
 
-**Answer:** Pure ML models are black boxes. Regulators require explainable decisions for disputes. We use ML for scoring, then apply transparent rules for final decisions:
+**回答：**纯 ML 模型是黑盒，监管机构要求争议处理中的决策可解释。我们用 ML 打分，再用透明规则做最终决策：
 
-| Layer | Role | Speed | Explainability |
+| 层 | 作用 | 速度 | 可解释性 |
 |-------|------|-------|----------------|
-| ML Ensemble | Catch complex patterns | 10ms | Low |
-| Business Rules | Encode known fraud types | 5ms | High |
-| Combined | Best of both | 15ms | Medium-High |
+| ML 集成 | 捕获复杂模式 | 10ms | 低 |
+| 业务规则 | 编码已知欺诈类型 | 5ms | 高 |
+| 组合 | 兼顾两者优点 | 15ms | 中高 |
 
-Rules examples: "Block if 5+ transactions in different countries within 1 hour" is explainable to regulators.
+规则示例：“1 小时内在不同国家发生 5 笔以上交易则阻止”，监管人员可以理解。
 
-### 2. Three-Way Decision: Approve / Escalate / Reject
+### 2. 三路决策：批准 / 升级 / 拒绝
 
-**Answer:** Binary approve/reject is too blunt. The "gray zone" (0.3-0.7 score) goes to rule-based escalation or human review for high-value transactions:
+**回答：**二元的批准/拒绝过于粗糙。“灰区”（0.3～0.7 分）交给规则升级流程；高金额交易则进行人工审核：
 
 ```python
 def decide(transaction, fraud_score):
@@ -87,11 +87,11 @@ def decide(transaction, fraud_score):
         return "APPROVE", None
 ```
 
-### 3. Why LLM for Explanation, Not SHAP/LIME?
+### 3. 为什么用 LLM 解释，而不是 SHAP/LIME？
 
-**Answer:** SHAP values tell you "feature X contributed 0.3 to the score." Customers and regulators want "This transaction was flagged because it was made from a new device in a country you have never visited, for an amount 10x your usual purchase."
+**回答：**SHAP 值只会告诉你“特征 X 为分数贡献了 0.3”。客户和监管人员想知道的是：“这笔交易被标记，是因为它来自你从未去过的国家的新设备，金额是你通常消费的 10 倍。”
 
-We generate natural language explanations using the feature importance as input:
+我们以特征重要性为输入生成自然语言解释：
 
 ```python
 prompt = f"""
@@ -114,9 +114,9 @@ Write a 2-sentence explanation for the cardholder.
 
 ---
 
-## Feature Engineering for Speed
+## 面向速度的特征工程
 
-100ms budget means features must be pre-computed:
+100ms 的预算意味着特征必须预计算：
 
 ```mermaid
 flowchart LR
@@ -139,13 +139,13 @@ flowchart LR
     COMBINE --> MODEL[ML Model]
 ```
 
-**Key insight:** User profile (average spend, typical merchants, home geography) is computed offline. Real-time only adds transaction-specific features.
+**关键洞见：**用户画像（平均消费、常用商户、常住地理位置）离线计算，实时阶段只增加交易特有的特征。
 
 ---
 
-## Handling Evolving Fraud Patterns
+## 处理演化中的欺诈模式
 
-Fraudsters adapt. Last month's model misses this month's attacks.
+欺诈者会适应变化，上月的模型可能漏掉本月的攻击。
 
 ```mermaid
 flowchart TB
@@ -163,33 +163,33 @@ flowchart TB
     end
 ```
 
-**Emergency rules** can be deployed in minutes (just a config update). Model retraining takes days but catches more subtle patterns.
+**紧急规则**可以在几分钟内部署（只需更新配置）。模型重训练需要几天，但能捕获更隐蔽的模式。
 
 ---
 
-## Interview Follow-Up Questions
+## 面试追问
 
-**Q: How do you handle model latency spikes?**
+**问：如何处理模型延迟尖峰？**
 
-A: We have a **fallback stack**. If the ML model does not respond within 50ms, we fall back to rule-based scoring only. The rules cover the most common fraud patterns. We also have a "default approve" for transactions under $10 if all systems are slow.
+答：我们有**回退栈**。如果 ML 模型在 50ms 内没有响应，就只回退到基于规则的评分，规则覆盖最常见的欺诈模式。如果所有系统都变慢，10 美元以下交易还可以默认批准。
 
-**Q: What about coordinated fraud attacks?**
+**问：如何处理协同欺诈攻击？**
 
-A: We maintain global velocity counters (not just per-user). If we see 100 transactions to the same obscure merchant in 1 minute from different cards, that triggers a merchant-level block even if individual transactions look clean.
+答：我们维护全局速度计数器，而不只是按用户统计。如果 1 分钟内发现不同银行卡向同一冷门商户发起 100 笔交易，即使单笔交易看起来正常，也会触发商户级阻断。
 
-**Q: How do you balance fraud prevention with customer experience?**
+**问：如何平衡欺诈防范与客户体验？**
 
-A: We track the "insult rate": percentage of legitimate customers blocked. Each product team has an insult budget. If the fraud model's insult rate exceeds budget, we loosen thresholds automatically and alert the team. Better to accept slightly more fraud than to anger loyal customers.
-
----
-
-## Key Takeaways for Interviews
-
-1. **ML for scoring, rules for explainability**: combine both for regulated domains
-2. **Three-way decisions reduce false positives**: gray zone gets extra scrutiny
-3. **Pre-compute everything possible**: real-time budget is for combination only
-4. **Continuous retraining is essential**: fraud patterns evolve weekly
+答：我们跟踪“冒犯率”，即被阻止的正常客户比例。每个产品团队都有冒犯预算；如果欺诈模型的冒犯率超过预算，就自动放宽阈值并通知团队。与激怒忠实客户相比，适当接受更多欺诈通常更好。
 
 ---
 
-*Related chapters: [Evaluation and Observability](../14-evaluation-and-observability/), [Reliability Patterns](../13-reliability-and-safety/03-reliability-patterns.md)*
+## 面试关键要点
+
+1. **ML 用于评分、规则用于解释**：监管领域要结合两者。
+2. **三路决策减少误报**：灰区接受额外审查。
+3. **尽可能预计算**：实时预算只用于组合特征。
+4. **持续重训练不可或缺**：欺诈模式每周都在变化。
+
+---
+
+*相关章节：[评测与可观测性](../14-evaluation-and-observability/)、[可靠性模式](../13-reliability-and-safety/03-reliability-patterns.md)*

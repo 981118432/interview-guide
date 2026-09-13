@@ -1,27 +1,27 @@
 # 案例研究：AI 客户支持
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-## The Problem
+## 问题
 
-An e-commerce company handles **2 million support tickets per month**. They want an AI system that can automatically resolve 60% of tickets without human intervention, while seamlessly escalating complex issues.
+一家电子商务公司每月处理**200 万张支持工单**。他们希望 AI 系统在无需人工介入的情况下自动解决 60% 的工单，同时把复杂问题顺畅地升级给人工。
 
-**Constraints given in the interview:**
-- 24/7 operation across 12 languages
-- Must integrate with existing Zendesk and Salesforce
-- Cannot make false promises (refunds, shipping dates)
-- Human agents must be able to take over mid-conversation
-- Cost target: $0.05 per resolved ticket
-
----
-
-## The Interview Question
-
-> "Design a customer support AI that handles 'Where is my order?' automatically but knows when to escalate 'I want to sue you for fraud' to a human."
+**面试中给出的约束：**
+- 支持 12 种语言、全天候运行。
+- 必须与现有 Zendesk 和 Salesforce 集成。
+- 不能做出虚假承诺（退款、发货日期）。
+- 人工客服必须能在对话中途接管。
+- 成本目标：每张已解决工单 0.05 美元。
 
 ---
 
-## Solution Architecture
+## 面试题
+
+> “设计一个客服 AI：能够自动处理‘我的订单在哪里？’，并知道何时将‘我要起诉你们欺诈’升级给人工。”
+
+---
+
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -56,21 +56,21 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Three-Tier Routing (Auto / Hybrid / Escalate)
+### 1. 三级路由（自动 / 混合 / 升级）
 
-**Answer:** Not all tickets are equal. We classify into three paths:
+**回答：**并非所有工单都相同，我们将它们分到三条路径：
 
-| Path | Criteria | Example | Human Involvement |
+| 路径 | 条件 | 示例 | 人工参与 |
 |------|----------|---------|-------------------|
-| **Auto** | High confidence, low risk | "Where is my order?" | None |
-| **Hybrid** | Medium confidence or medium risk | "I want a refund" | Reviews AI draft |
-| **Escalate** | Legal, threats, VIP, low confidence | "This is fraud" | Full human handling |
+| **自动** | 高置信度、低风险 | “我的订单在哪里？” | 无 |
+| **混合** | 中等置信度或中等风险 | “我想退款” | 复核 AI 草稿 |
+| **升级** | 法律、威胁、VIP、低置信度 | “这是欺诈” | 全程人工处理 |
 
-### 2. Tool-Based Resolution, Not Pure Generation
+### 2. 基于工具解决，而不是纯生成
 
-**Answer:** The AI does not "know" where the order is. It calls the Order API tool. This is critical for accuracy:
+**回答：**AI 并不知道订单在哪里，而是调用订单 API 工具。这对准确性至关重要：
 
 ```python
 @tool
@@ -85,22 +85,22 @@ def get_order_status(order_id: str) -> dict:
     }
 ```
 
-The LLM orchestrates tools but never fabricates data.
+LLM 负责编排工具，但绝不编造数据。
 
-### 3. Why Safety Check Before Send?
+### 3. 为什么发送前要做安全检查？
 
-**Answer:** Even auto-resolved tickets go through a safety filter:
+**回答：**即使是自动解决的工单，也必须经过安全过滤器：
 
-1. **Promise Detection**: Flags statements like "I guarantee" or "We will pay"
-2. **Sentiment Mismatch**: Catches if AI sounds happy when customer is angry
-3. **PII Leak**: Ensures no internal notes or other customer data appear
-4. **Competitor Mention**: Flags if AI recommends a competitor
+1. **承诺检测**：标记“我保证”或“我们会赔付”等表述。
+2. **情绪不匹配**：发现客户很生气时 AI 却语气轻快的情况。
+3. **PII 泄露**：确保不会出现内部备注或其他客户数据。
+4. **竞品提及**：如果 AI 推荐竞争对手则标记。
 
 ---
 
-## The Escalation Intelligence
+## 升级决策智能
 
-The hardest part is knowing **when** to escalate. We use a confidence score with multiple signals:
+最难的部分是判断**何时**升级。我们使用融合多种信号的置信度分数：
 
 ```mermaid
 flowchart LR
@@ -117,13 +117,13 @@ flowchart LR
     SCORE -->|< 0.5| ESCALATE[Immediate Escalate]
 ```
 
-**Key insight:** A VIP customer asking a simple question still goes to Hybrid path because the cost of a mistake is higher.
+**关键洞见：**VIP 客户即使只问简单问题，也会进入混合路径，因为出错成本更高。
 
 ---
 
-## Multilingual Support
+## 多语言支持
 
-12 languages without 12 separate models:
+支持 12 种语言，但不部署 12 个独立模型：
 
 ```mermaid
 flowchart LR
@@ -134,15 +134,15 @@ flowchart LR
     TRANSLATE_OUT --> RESPONSE[Response in Spanish]
 ```
 
-**Why not native multilingual models?**
+**为什么不用原生多语言模型？**
 
-Cost. GPT-4o handles all 12 languages well. Using specialized models per language would require 12 deployments. Translation adds latency but keeps infrastructure simple.
+因为成本。GPT-4o 能很好地处理这 12 种语言。每种语言使用专用模型需要 12 套部署；翻译会增加延迟，但能保持基础设施简单。
 
 ---
 
-## Human Takeover (Mid-Conversation)
+## 人工接管（对话中途）
 
-When a human takes over, they need full context:
+人工接管时，需要完整上下文：
 
 ```python
 def handoff_to_human(conversation_id: str, agent_id: str):
@@ -171,44 +171,44 @@ def handoff_to_human(conversation_id: str, agent_id: str):
 
 ---
 
-## Cost Analysis
+## 成本分析
 
-| Component | Cost per Ticket |
+| 组件 | 每张工单成本 |
 |-----------|-----------------|
-| Intent classification (GPT-4o-mini) | $0.002 |
-| Tool calls (Order API, FAQ search) | $0.001 |
-| Response generation (GPT-4o-mini) | $0.008 |
-| Safety check | $0.003 |
-| Translation (if needed, 30% of tickets) | $0.004 |
-| **Average total** | **$0.018** |
+| 意图分类（GPT-4o-mini） | $0.002 |
+| 工具调用（订单 API、FAQ 搜索） | $0.001 |
+| 回答生成（GPT-4o-mini） | $0.008 |
+| 安全检查 | $0.003 |
+| 翻译（需要时，30% 的工单） | $0.004 |
+| **平均总计** | **$0.018** |
 
-At a 60% auto-resolution rate: **$0.03 per resolved ticket** (well under $0.05 target)
-
----
-
-## Interview Follow-Up Questions
-
-**Q: What if the AI keeps apologizing but never actually helps?**
-
-A: We track "resolution effectiveness" not just "response sent." If a customer replies again within 24 hours on the same issue, that ticket is marked as "unresolved" and the AI pattern is flagged for review. We also run weekly analysis: "What phrases correlate with customer follow-ups?"
-
-**Q: How do you handle a customer who insists on talking to a human?**
-
-A: Explicit escalation phrases ("talk to a human", "speak to manager") trigger immediate handoff regardless of confidence score. We never argue with escalation requests.
-
-**Q: What about customers who try to jailbreak the support AI?**
-
-A: Input sanitization plus strict tool-only responses. The AI cannot be prompted to reveal system prompts because it does not generate free-form answers: it calls tools and summarizes their outputs. The system prompt is also extremely narrow: "You help with order issues for [Company]. You cannot discuss other topics."
+自动解决率为 60% 时：**每张已解决工单 0.03 美元**（明显低于 0.05 美元目标）。
 
 ---
 
-## Key Takeaways for Interviews
+## 面试追问
 
-1. **Tiered routing balances automation with risk**: not every ticket should be auto-resolved
-2. **Tool-based grounding prevents hallucination**: the AI retrieves facts, it does not generate them
-3. **Confidence is multi-dimensional**: intent clarity + sentiment + customer tier + topic risk
-4. **Human handoff needs context**: summarize, do not just dump the transcript
+**问：如果 AI 一直道歉却始终没有真正解决问题怎么办？**
+
+答：我们跟踪“解决有效性”，而不只是“是否发送了回答”。如果客户在 24 小时内因同一问题再次回复，工单就标记为“未解决”，并将对应 AI 模式标记为待复核。我们还每周分析“哪些表述与客户再次追问相关”。
+
+**问：如何处理坚持要求与人工沟通的客户？**
+
+答：明确的升级短语（“和人工说”“找经理”）无论置信度分数如何都会立即触发转人工。我们不会与升级请求争辩。
+
+**问：如果客户尝试让客服 AI 越狱怎么办？**
+
+答：采用输入清洗加严格的工具限定回答。AI 不生成自由文本答案，而是调用工具并总结工具输出，因此无法通过 Prompt 诱导其泄露系统 Prompt。系统 Prompt 也极其狭窄：“你只帮助处理[公司]的订单问题，不能讨论其他主题。”
 
 ---
 
-*Related chapters: [Human-in-the-Loop Patterns](../07-agentic-systems/08-human-in-the-loop-patterns.md), [Guardrails Implementation](../13-reliability-and-safety/01-guardrails.md)*
+## 面试关键要点
+
+1. **分层路由平衡自动化与风险**：不是每张工单都适合自动解决。
+2. **基于工具的事实依据能防止幻觉**：AI 检索事实，而不是生成事实。
+3. **置信度是多维的**：意图清晰度 + 情绪 + 客户等级 + 主题风险。
+4. **转人工需要上下文**：应提供摘要，而不是只丢出完整记录。
+
+---
+
+*相关章节：[人在回路模式](../07-agentic-systems/08-human-in-the-loop-patterns.md)、[护栏实现](../13-reliability-and-safety/01-guardrails.md)*

@@ -1,69 +1,69 @@
 # 案例研究：大规模内容审核
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-This case study covers designing an AI-powered content moderation system for a social platform handling millions of posts daily.
+本案例演示如何为每天处理数百万条帖子的社交平台设计 AI 内容审核系统。
 
 ## 目录
 
-- [Problem Statement](#problem-statement)
-- [Requirements Analysis](#requirements-analysis)
-- [Architecture Design](#architecture-design)
-- [Classification Pipeline](#classification-pipeline)
-- [Human-in-the-Loop](#human-in-the-loop)
-- [Adversarial Robustness](#adversarial-robustness)
-- [Results and Metrics](#results-and-metrics)
-- [Interview Walkthrough](#interview-walkthrough)
+- [问题陈述](#problem-statement)
+- [需求分析](#requirements-analysis)
+- [架构设计](#architecture-design)
+- [分类流水线](#classification-pipeline)
+- [人在回路](#human-in-the-loop)
+- [对抗鲁棒性](#adversarial-robustness)
+- [结果与指标](#results-and-metrics)
+- [面试演练](#interview-walkthrough)
 
 ---
 
-## Problem Statement
+## 问题陈述
 
-**Company:** Social media platform with 50M daily active users
+**公司：**拥有 5000 万日活用户的社交媒体平台
 
-**Current state:**
-- 10M posts per day
-- 500 human moderators
-- Average review time: 4 hours
-- False positive rate: 15%
-- Harmful content reaching users: 2%
+**现状：**
+- 每天 1000 万条帖子
+- 500 名人工审核员
+- 平均审核时间：4 小时
+- 误报率：15%
+- 到达用户的有害内容：2%
 
-**Goals:**
-- Reduce harmful content exposure to < 0.1%
-- Review priority content in < 15 minutes
-- Reduce false positive rate to < 5%
-- Scale without linear moderator growth
+**目标：**
+- 将有害内容曝光率降至 0.1% 以下
+- 在 15 分钟内审核高优先级内容
+- 将误报率降至 5% 以下
+- 在不按用户量线性增加审核员的情况下扩展
 
 ---
 
-## Requirements Analysis
+## 需求分析
 
-### Content Categories
+### 内容类别
 
-| Category | Severity | Action | Latency |
+| 类别 | 严重程度 | 动作 | 延迟 |
 |----------|----------|--------|---------|
-| CSAM | Critical | Block + Report | Immediate |
-| Violence/Gore | High | Block + Review | < 1 min |
-| Hate speech | High | Block + Review | < 5 min |
-| Harassment | Medium | Review + Warn | < 15 min |
-| Spam | Medium | Deprioritize | < 1 hour |
-| Misinformation | Medium | Label + Review | < 1 hour |
-| Adult content | Low | Age-gate | < 1 hour |
+| CSAM（儿童性虐待材料） | 严重 | 拦截并举报 | 立即 |
+| 暴力/血腥 | 高 | 拦截并复核 | < 1 分钟 |
+| 仇恨言论 | 高 | 拦截并复核 | < 5 分钟 |
+| 骚扰 | 中 | 复核并警告 | < 15 分钟 |
+| 垃圾信息 | 中 | 降低展示优先级 | < 1 小时 |
+| 错误信息 | 中 | 添加标签并复核 | < 1 小时 |
+| 成人内容 | 低 | 年龄门槛 | < 1 小时 |
 
-### Accuracy Requirements
+### 准确性需求
 
-| Metric | Target | Rationale |
+| 指标 | 目标 | 理由 |
 |--------|--------|-----------|
-| Recall (harmful) | > 99% | Minimize harm exposure |
-| Precision | > 95% | Minimize false positives |
-| Latency (critical) | < 1 min | Prevent spread |
-| Latency (standard) | < 15 min | Balance resources |
+| 召回率（有害内容） | > 99% | 最小化有害内容曝光 |
+| 精确率 | > 95% | 最小化误报 |
+| 延迟（严重类别） | < 1 分钟 | 防止传播 |
+| 延迟（标准类别） | < 15 分钟 | 平衡资源 |
 
 ---
 
-## Architecture Design
+## 架构设计
 
-### High-Level Architecture
+### 高层架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -114,7 +114,7 @@ This case study covers designing an AI-powered content moderation system for a s
 └──────────────────────────────────────────────────────────┘│    │
 ```
 
-The tiered pipeline as a decision tree. Each tier escalates only what it cannot decide cheaply. The cost-per-decision ratio between Tier 1 and Tier 4 is roughly 1:5000, so getting routing right is the main lever for unit economics:
+分层流水线可表示为决策树。每层只将自己无法低成本决定的内容升级；第 1 层与第 4 层的单次决策成本约为 1:5000，因此正确路由是单位经济性的主要杠杆：
 
 ```mermaid
 flowchart TD
@@ -130,7 +130,7 @@ flowchart TD
     T3 -->|uncertain: 2%| HR[Human Review<br/>minutes, $0.50]
 ```
 
-### Processing Tiers
+### 处理层级
 
 | Tier | Method | Latency | Cost | Coverage |
 |------|--------|---------|------|----------|
@@ -141,9 +141,9 @@ flowchart TD
 
 ---
 
-## Classification Pipeline
+## 分类流水线
 
-### Tier 1: Fast Filters
+### 第 1 层：快速过滤
 
 ```python
 class FastFilters:
@@ -193,7 +193,7 @@ class FastFilters:
         return FilterResult(action="continue", tier=1)
 ```
 
-### Tier 2: ML Classification
+### 第 2 层：ML 分类
 
 ```python
 ### Tier 2: Native Multimodal Classification (Gemini 3 Flash)
@@ -237,11 +237,11 @@ class NuanceReviewer:
 
 ---
 
-## Human-in-the-Loop
+## 人在回路
 
-### Review Queue Management
+### 审核队列管理
 
-Every piece of content traverses a lifecycle from submission to a terminal state. The lifecycle as a state machine makes SLOs concrete: each priority lane has a different target time-to-terminal, and an appeal can transition back to pending:
+每条内容都会从提交经历到终态。将生命周期表示为状态机可以具体化 SLO：每条优先级通道有不同的终态目标时间，申诉还可以回到待处理状态：
 
 ```mermaid
 stateDiagram-v2
@@ -314,7 +314,7 @@ class ReviewQueueManager:
         return priority
 ```
 
-### Moderator Interface
+### 审核员界面
 
 ```python
 class ModeratorDecision:
@@ -350,9 +350,9 @@ class ModeratorDecision:
 
 ---
 
-## Adversarial Robustness
+## 对抗鲁棒性
 
-### Evasion Techniques and Defenses
+### 规避技术与防御
 
 | Evasion Technique | Defense |
 |-------------------|---------|
@@ -363,7 +363,7 @@ class ModeratorDecision:
 | Encoded content | Decoding pipeline |
 | Adversarial images | Robust vision models |
 
-### Defensive Pipeline
+### 防御流水线
 
 ```python
 class AdversarialDefense:
@@ -407,71 +407,71 @@ class AdversarialDefense:
 
 ---
 
-## Results and Metrics
+## 结果与指标
 
-### Performance Comparison
+### 性能比较
 
-| Metric | Before | After | Improvement |
+| 指标 | 之前 | 之后 | 改善 |
 |--------|--------|-------|-------------|
-| Harmful content exposure | 2% | 0.08% | 96% reduction |
-| Review latency (critical) | 4 hours | 8 minutes | 30x faster |
-| False positive rate | 15% | 4.2% | 72% reduction |
-| Moderator efficiency | 50/day | 200/day | 4x increase |
+| 有害内容曝光率 | 2% | 0.08% | 降低 96% |
+| 审核延迟（严重类别） | 4 小时 | 8 分钟 | 快 30 倍 |
+| 误报率 | 15% | 4.2% | 降低 72% |
+| 审核员效率 | 50/天 | 200/天 | 提升 4 倍 |
 
-### Cost Analysis (Dec 2025)
+### 成本分析（2025 年 12 月）
 
-| Component | Per 10M Posts | Notes |
+| 组件 | 每 1000 万条帖子 | 说明 |
 |-----------|---------------|-------|
-| Tier 1 Filters | $0.10 | Negligible |
-| Tier 2 Multimodal | $0.50 | Gemini 3 Flash ($0.05/1M) |
-| Tier 3 LLM (GPT-5.2) | $0.20 | Nuance checks on 10% traffic |
-| Human Review | $15.00 | Focused on only 1% of volume |
-| **Total** | **$15.80** | **40% reduction vs 2024** |
+| 第 1 层过滤器 | $0.10 | 可忽略 |
+| 第 2 层多模态 | $0.50 | Gemini 3 Flash（$0.05/1M） |
+| 第 3 层 LLM（GPT-5.2） | $0.20 | 对 10% 流量做细节复核 |
+| 人工审核 | $15.00 | 只处理 1% 的流量 |
+| **合计** | **$15.80** | **相比 2024 年下降 40%** |
 
 > [!TIP]
-> **Production Wisdom:** Moving the heavy lifting from 'Tier 2 Vision/OCR' to **Native Multimodal (Gemini 3 Flash)** reduced pipeline complexity by 70% and latency by 400ms.
+> **生产经验：**将主要工作从“第 2 层视觉/OCR”转移到**原生多模态（Gemini 3 Flash）**后，流水线复杂度降低 70%，延迟降低 400ms。
 
-*Human review still dominates cost but focused on hard cases*
+*人工审核仍然占据主要成本，但只聚焦于困难案例。*
 
 ---
 
-## Interview Walkthrough
+## 面试演练
 
-**Interviewer:** "Design a content moderation system for a social media platform."
+**面试官：**“为社交媒体平台设计一个内容审核系统。”
 
-**Strong response:**
+**强回答：**
 
-1. **Clarify scale and requirements** (1 min)
-   - "What's the volume? What content types? What's acceptable false positive rate?"
-   - "Any regulatory requirements (CSAM reporting, GDPR)?"
+1. **澄清规模和需求**（1 分钟）
+   - “流量是多少？有哪些内容类型？可接受的误报率是多少？”
+   - “是否有监管要求（CSAM 举报、GDPR）？”
 
-2. **Multi-tier architecture** (3 min)
-   - "I would use a cascade of increasing sophistication:"
-   - "Tier 1: Hash matching, keyword filters - instant, certain"
-   - "Tier 2: ML classifiers - fast, specialized"
-   - "Tier 3: LLM review - nuanced, context-aware"
-   - "Tier 4: Human review - final arbiter"
-   - "Each tier handles what the previous cannot"
+2. **多层架构**（3 分钟）
+   - “我会使用复杂度逐层增加的级联：”
+   - “第 1 层：哈希匹配、关键词过滤——即时且确定。”
+   - “第 2 层：ML 分类器——快速且专用。”
+   - “第 3 层：LLM 复核——细致且理解上下文。”
+   - “第 4 层：人工审核——最终裁决者。”
+   - “每一层处理上一层无法处理的内容。”
 
-3. **Prioritization is key** (2 min)
-   - "Not all harmful content is equal. CSAM and violence need immediate action. Hate speech is priority but not instant. Spam can wait."
-   - "Priority queue based on severity, reach, and confidence"
+3. **优先级是关键**（2 分钟）
+   - “有害内容并不等价。CSAM 和暴力需要立即处理；仇恨言论优先但不一定即时；垃圾信息可以延后。”
+   - “根据严重程度、触达范围和置信度建立优先级队列。”
 
-4. **Human-in-the-loop design** (2 min)
-   - "Humans for low-confidence decisions and appeals"
-   - "AI handles 95%+ automatically to make human review economically viable"
-   - "Feedback loop: human decisions improve ML models"
+4. **人在回路设计**（2 分钟）
+   - “低置信度决策和申诉交给人工。”
+   - “AI 自动处理 95% 以上内容，使人工审核在经济上可行。”
+   - “建立反馈闭环：人工决策用于改进 ML 模型。”
 
-5. **Adversarial robustness** (2 min)
-   - "Users will evade detection. Defenses include:"
-   - "Text normalization for obfuscation"
-   - "OCR for text in images"
-   - "Continuous model updates as evasion evolves"
+5. **对抗鲁棒性**（2 分钟）
+   - “用户会尝试规避检测，防御措施包括：”
+   - “通过文本规范化处理混淆写法。”
+   - “使用 OCR 识别图片中的文字。”
+   - “随着规避方式演化持续更新模型。”
 
-6. **Metrics** (1 min)
-   - "Primary: harmful content exposure rate (target < 0.1%)"
-   - "Secondary: false positive rate (user experience)"
-   - "Operational: review latency, moderator throughput"
+6. **指标**（1 分钟）
+   - “主要指标：有害内容曝光率（目标 < 0.1%）。”
+   - “次要指标：误报率（用户体验）。”
+   - “运营指标：审核延迟、审核员吞吐量。”
 
 ---
 
@@ -483,4 +483,4 @@ class AdversarialDefense:
 
 ---
 
-*Next: [LLM Pricing Reference](../02-model-landscape/03-pricing-and-costs.md)*
+*下一篇：[LLM 定价参考](../02-model-landscape/03-pricing-and-costs.md)*

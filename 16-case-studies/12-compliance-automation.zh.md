@@ -1,27 +1,27 @@
 # 案例研究：监管合规自动化
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-## The Problem
+## 问题
 
-A pharmaceutical company must ensure all marketing materials comply with **FDA regulations**. Currently, legal review takes 2 weeks per asset. They want AI to pre-screen materials and flag issues, reducing legal review to 2 days.
+一家制药公司必须确保所有营销材料符合 **FDA 法规**。目前每份材料的法律审核需要 2 周，他们希望 AI 预筛材料并标记问题，把法律审核缩短到 2 天。
 
-**Constraints given in the interview:**
-- Must cite specific regulation sections, not just "this seems wrong"
-- False negatives (missing violations) are unacceptable
-- False positives (over-flagging) should be under 20%
-- 500 marketing assets per month
-- Audit trail required for regulatory inspection
-
----
-
-## The Interview Question
-
-> "Design a system that reviews pharmaceutical marketing materials and identifies specific regulatory violations with citations."
+**面试中给出的约束：**
+- 必须引用具体法规条款，不能只说“这看起来不对”。
+- 不能漏掉违规项（假阴性不可接受）。
+- 误报（过度标记）应低于 20%。
+- 每月 500 份营销材料。
+- 监管检查需要完整审计轨迹。
 
 ---
 
-## Solution Architecture
+## 面试题
+
+> “设计一个审查制药营销材料、识别具体法规违规并给出引用的系统。”
+
+---
+
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -55,11 +55,11 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Claim Extraction Before Compliance Check
+### 1. 合规检查前先抽取声明
 
-**Answer:** Marketing materials are dense. Checking the entire document against regulations is inefficient. We first extract individual **claims**:
+**回答：**营销材料内容密集，直接将整份文档与法规比对效率很低。我们先抽取独立的**声明**：
 
 ```python
 claims = extract_claims(document)
@@ -71,33 +71,33 @@ claims = extract_claims(document)
 # ]
 ```
 
-Each claim is then checked independently against relevant regulations.
+随后将每条声明分别与相关法规核对。
 
-### 2. Why RAG Over Fine-Tuning for Regulations?
+### 2. 对法规为什么选择 RAG 而不是微调？
 
-**Answer:** Regulations change. FDA updates guidance documents monthly. Fine-tuning would require retraining after each update. RAG allows us to:
-- Update the regulation index immediately when new guidance is released
-- Track which version of regulations was used for each review (audit trail)
-- Show the exact source passage to legal reviewers
+**回答：**法规会变化，FDA 每月都会更新指导文件。每次更新后重新微调成本很高，而 RAG 可以：
+- 新指导发布后立即更新法规索引。
+- 跟踪每次审核使用的法规版本（审计轨迹）。
+- 向法律审核人员展示准确的来源段落。
 
-### 3. Conservative Flagging Strategy
+### 3. 保守的标记策略
 
-**Answer:** False negatives (missed violations) are catastrophic; false positives (extra review) just cost time. We use a **threshold hierarchy**:
+**回答：**漏掉违规（假阴性）是灾难性的，而额外审核（假阳性）主要只是增加时间成本。因此使用**分层阈值**：
 
-| Confidence | Action |
+| 置信度 | 动作 |
 |------------|--------|
-| >90% violation | Flag as HIGH severity |
-| 70-90% potential | Flag as MEDIUM, cite concern |
-| 50-70% unclear | Flag as LOW, note ambiguity |
-| <50% likely compliant | No flag, but log for audit |
+| >90% 违规 | 标记为 HIGH 严重度 |
+| 70～90% 可能违规 | 标记为 MEDIUM，并引用疑点 |
+| 50～70% 不明确 | 标记为 LOW，记录歧义 |
+| <50% 可能合规 | 不标记，但记录到审计日志 |
 
-We never output "compliant" without logging the reasoning.
+没有记录推理过程时，我们绝不输出“合规”。
 
 ---
 
-## The Precedent Database
+## 判例数据库
 
-Regulations are often ambiguous. Previous FDA warning letters clarify how rules are enforced:
+法规通常存在歧义。FDA 过去的警告信可以说明规则是如何执行的：
 
 ```mermaid
 flowchart LR
@@ -115,13 +115,13 @@ flowchart LR
     end
 ```
 
-**Why this matters:** A claim like "clinically proven" might seem fine based on regulations alone. But if we find 5 warning letters where FDA cited companies for using "clinically proven" without specific trial data, that is a red flag.
+**这很重要：**仅看法规，“临床验证”这样的声明可能看起来没问题；但如果我们发现 5 封警告信都指出企业在没有具体试验数据时使用了“临床验证”，这就是危险信号。
 
 ---
 
-## The Audit Trail Requirement
+## 审计轨迹要求
 
-Every decision must be traceable:
+每个决策都必须可追溯：
 
 ```python
 compliance_decision = {
@@ -142,9 +142,9 @@ compliance_decision = {
 
 ---
 
-## Handling Images and Video
+## 处理图像和视频
 
-Pharmaceutical marketing includes visual claims (happy patients, before/after images):
+制药营销包含视觉声明（快乐的患者、前后对比图）：
 
 ```mermaid
 flowchart LR
@@ -154,49 +154,49 @@ flowchart LR
     CLAIMS_V --> CHECK_V[Compliance Check]
 ```
 
-**Example:** An image showing a patient running implies efficacy. If the drug is for arthritis, we check if clinical trials support "improved mobility" claims.
+**示例：**患者奔跑的图片暗示药物有效。如果药物用于关节炎，我们会检查临床试验是否支持“改善活动能力”的声明。
 
 ---
 
-## Cost Analysis
+## 成本分析
 
-| Stage | Cost per Asset |
+| 阶段 | 每份材料成本 |
 |-------|----------------|
-| Document parsing | $0.05 |
-| Claim extraction | $0.15 |
-| Regulation retrieval | $0.02 |
-| Compliance evaluation (per claim, avg 12 claims) | $1.80 |
-| Image analysis (avg 5 images) | $0.75 |
-| Report generation | $0.10 |
+| 文档解析 | $0.05 |
+| 声明抽取 | $0.15 |
+| 法规检索 | $0.02 |
+| 合规评估（每条声明，平均 12 条） | $1.80 |
+| 图像分析（平均 5 张） | $0.75 |
+| 报告生成 | $0.10 |
 | **Total** | **$2.87** |
 
-For 500 assets/month: **$1,435/month** (vs. $50K+/month for equivalent legal hours)
+每月 500 份材料：**每月 1435 美元**（相同法律工时成本超过每月 5 万美元）。
 
 ---
 
-## Interview Follow-Up Questions
+## 面试追问
 
-**Q: How do you handle regulations that require human judgment?**
+**问：如何处理需要人工判断的法规？**
 
-A: We do not replace humans; we triage. The system flags issues with confidence scores. Low-confidence flags go to senior counsel. High-confidence clear items skip detailed review. This reduces the 2-week review to 2 days by focusing human attention on edge cases.
+答：我们不替代人工，而是做分流。系统给问题标记附上置信度分数，低置信度标记交给资深法律顾问，高置信度且清晰的项目跳过详细审核。把人工注意力集中到边界案例后，可将 2 周审核缩短到 2 天。
 
-**Q: What if FDA updates a regulation mid-month?**
+**问：如果 FDA 在月中更新法规怎么办？**
 
-A: We have a "Regulation Watch" service that monitors FDA RSS feeds and Federal Register updates. When a relevant update is detected, we re-index and flag any recent reviews that might be affected by the change.
+答：我们有“法规监控”服务，持续监听 FDA RSS 和 Federal Register 更新。检测到相关更新后，重新建立索引，并标记近期可能受影响的审核。
 
-**Q: How do you explain the AI's reasoning to regulators during an audit?**
+**问：审计期间如何向监管机构解释 AI 的推理？**
 
-A: Every decision includes the full reasoning chain: the claim extracted, the regulation retrieved, the precedent cited, and the model's evaluation. We can show regulators exactly why a decision was made, with version numbers for all components.
-
----
-
-## Key Takeaways for Interviews
-
-1. **Claim extraction first**: break complex documents into reviewable units
-2. **Precedent databases beat pure regulation text**: how rules are enforced matters
-3. **Conservative thresholds for high-stakes domains**: optimize for recall, not precision
-4. **Audit trails are architecture**: design for explainability from day one
+答：每个决策都包含完整推理链：抽取的声明、检索的法规、引用的判例以及模型评估结果。我们可以向监管机构准确展示做出决策的原因，并提供所有组件的版本号。
 
 ---
 
-*Related chapters: [RAG Fundamentals](../06-retrieval-systems/01-rag-fundamentals.md), [Guardrails Implementation](../13-reliability-and-safety/01-guardrails.md)*
+## 面试关键要点
+
+1. **先抽取声明**：将复杂文档拆成可审核单元。
+2. **判例数据库优于纯法规文本**：规则如何执行同样重要。
+3. **高风险领域使用保守阈值**：优化召回率，而不是精确率。
+4. **审计轨迹属于架构**：从第一天起就为可解释性设计。
+
+---
+
+*相关章节：[RAG 基础](../06-retrieval-systems/01-rag-fundamentals.md)、[护栏实现](../13-reliability-and-safety/01-guardrails.md)*

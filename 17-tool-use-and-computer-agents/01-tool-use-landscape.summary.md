@@ -1,3 +1,3 @@
 # 2026 年工具使用与计算机 Agent 版图：中文概要
 
-本篇围绕该主题整理生产设计中的关键概念、架构取舍、实现方式与面试要点。阅读时应结合原文中的章节、代码、表格和链接，重点关注安全边界、可靠性、质量评测与成本约束。
+本篇梳理 2026 年工具使用生态：本地、云端、IDE、计算机使用 Agent，以及 OpenClaw、OpenHands、Open Interpreter、Claude Computer Use、Claude Code 和 IDE Agent 的架构与取舍。面试重点是 Sandbox、安全模型、状态管理、工具发现、延迟预算和故障处理。

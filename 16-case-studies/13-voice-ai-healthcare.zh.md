@@ -1,27 +1,27 @@
 # 案例研究：医疗语音 AI 助手
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-## The Problem
+## 问题
 
-A hospital network wants a **voice-based AI assistant** that helps nurses document patient encounters. The nurse speaks naturally; the AI produces structured clinical notes in real-time.
+一家医院网络希望使用**语音 AI 助手**帮助护士记录患者就诊。护士自然说话，AI 实时生成结构化临床记录。
 
-**Constraints given in the interview:**
-- HIPAA compliance (PHI handling)
-- Works in noisy hospital environments
-- Real-time transcription (under 500ms latency)
-- Must use medical terminology correctly
-- Integration with existing EHR (Epic/Cerner)
-
----
-
-## The Interview Question
-
-> "Design a voice assistant that a nurse can speak to during a patient visit, and it generates a structured clinical note in the EHR."
+**面试中给出的约束：**
+- 符合 HIPAA（处理 PHI）。
+- 能在嘈杂医院环境中工作。
+- 实时转写（延迟低于 500ms）。
+- 必须正确使用医学术语。
+- 与现有 EHR（Epic/Cerner）集成。
 
 ---
 
-## Solution Architecture
+## 面试题
+
+> “设计一个护士在患者就诊期间可以直接交谈的语音助手，并在 EHR 中生成结构化临床记录。”
+
+---
+
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -52,22 +52,22 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. On-Premise ASR for HIPAA
+### 1. 为满足 HIPAA 使用本地 ASR
 
-**Answer:** PHI cannot leave the hospital network without encryption and BAA. We deploy Whisper Large v3 on local GPU servers rather than using cloud APIs:
+**回答：**没有加密和 BAA，PHI 不能离开医院网络。因此我们在本地 GPU 服务器部署 Whisper Large v3，而不是调用云 API：
 
-| Option | Latency | HIPAA | Cost |
+| 方案 | 延迟 | HIPAA | 成本 |
 |--------|---------|-------|------|
-| Cloud ASR (OpenAI) | 200ms | Requires BAA, data leaves network | $0.006/min |
-| On-prem Whisper | 150ms | Full control, no data egress | $0.002/min (amortized GPU) |
+| 云 ASR（OpenAI） | 200ms | 需要 BAA，数据离开网络 | $0.006/分钟 |
+| 本地 Whisper | 150ms | 完全控制，不出网 | $0.002/分钟（GPU 摊销） |
 
-On-prem wins on both latency and compliance.
+本地部署在延迟和合规性两方面都更优。
 
-### 2. Speaker Diarization: Who Said What
+### 2. 说话人分离：谁说了什么
 
-**Answer:** The note must distinguish "Patient reports headache" from "Nurse observes patient grimacing." We use:
+**回答：**记录必须区分“患者诉说头痛”和“护士观察到患者皱眉”。我们使用：
 
 ```python
 # Pyannote for speaker diarization
@@ -79,11 +79,11 @@ roles = identify_roles(diarization, known_nurse_voiceprint)
 # Output: {"SPEAKER_0": "nurse", "SPEAKER_1": "patient"}
 ```
 
-The nurse's device captures their voiceprint at setup for role identification.
+护士设备在初始化时采集护士声纹，用于角色识别。
 
-### 3. Medical NER for Structured Extraction
+### 3. 用医学 NER 做结构化抽取
 
-**Answer:** We need structured data, not just prose. Medical NER extracts:
+**回答：**我们需要结构化数据，而不只是散文文本。医学 NER 抽取：
 
 ```mermaid
 flowchart LR
@@ -96,24 +96,24 @@ flowchart LR
     NER --> VITALS[Vitals: None mentioned]
 ```
 
-We use a fine-tuned BioBERT model for NER, not the LLM, because NER needs to be fast and deterministic.
+NER 使用微调后的 BioBERT 模型，而不是 LLM，因为 NER 需要快速且确定性强。
 
 ---
 
-## Handling Noisy Environments
+## 处理噪声环境
 
-Hospitals are loud. We use multiple strategies:
+医院环境很嘈杂，我们采用多种策略：
 
-1. **Directional microphones** on nurse devices focus on nearby speech
-2. **Noise-robust ASR models** (Whisper was trained on noisy data)
-3. **Confidence thresholds**: if ASR confidence is <0.7, we flag for nurse review rather than guessing
-4. **Keyword spotting**: medical terms have custom pronunciation models
+1. 护士设备使用**指向性麦克风**聚焦附近语音。
+2. 使用**抗噪 ASR 模型**（Whisper 在噪声数据上训练）。
+3. **置信度阈值**：ASR 置信度低于 0.7 时交给护士复核，而不是猜测。
+4. **关键词唤醒/检测**：为医学术语使用自定义发音模型。
 
 ---
 
-## The Structured Note Format
+## 结构化记录格式
 
-The LLM produces SOAP-format notes:
+LLM 生成 SOAP 格式记录：
 
 ```python
 note_prompt = f"""
@@ -137,9 +137,9 @@ P (Plan): Next steps, orders
 
 ---
 
-## EHR Integration (FHIR)
+## EHR 集成（FHIR）
 
-The output must be machine-readable for the EHR:
+输出必须是 EHR 可读取的机器格式：
 
 ```json
 {
@@ -164,44 +164,44 @@ The output must be machine-readable for the EHR:
 
 ---
 
-## Latency Budget
+## 延迟预算
 
-| Stage | Target | Actual |
+| 阶段 | 目标 | 实际 |
 |-------|--------|--------|
-| Audio capture to VAD | 50ms | 30ms |
-| ASR transcription | 200ms | 150ms |
-| Diarization | 100ms | 80ms |
-| NER extraction | 50ms | 40ms |
-| LLM structuring | 500ms | 450ms |
-| **Total (end-to-end)** | **900ms** | **750ms** |
+| 音频采集到 VAD | 50ms | 30ms |
+| ASR 转写 | 200ms | 150ms |
+| 说话人分离 | 100ms | 80ms |
+| NER 抽取 | 50ms | 40ms |
+| LLM 结构化 | 500ms | 450ms |
+| **总计（端到端）** | **900ms** | **750ms** |
 
-For real-time feel, we stream partial transcripts while NER and LLM run on completed sentences.
-
----
-
-## Interview Follow-Up Questions
-
-**Q: How do you handle medical abbreviations and jargon?**
-
-A: We maintain a custom vocabulary list that maps abbreviations (PRN, BID, SOB) to full terms. This is injected into both the ASR model (for better recognition) and the LLM prompt (for correct expansion in notes).
-
-**Q: What if the nurse makes a correction mid-sentence?**
-
-A: We detect correction patterns ("actually, I mean...", "no wait, it's...") and use only the corrected version. The LLM is instructed to prefer later statements when conflicts exist.
-
-**Q: How do you ensure the AI does not miss critical information?**
-
-A: We have a "completeness check" that verifies the note includes all extracted entities. If NER found "chest pain" but the SOAP note does not mention it, we flag for nurse review. We also run a "safety critical" detector that escalates mentions of suicidal ideation, abuse, or other mandatory reporting triggers.
+为了保持实时体验，在 NER 和 LLM 处理完整句子的同时，我们持续流式展示部分转写结果。
 
 ---
 
-## Key Takeaways for Interviews
+## 面试追问
 
-1. **On-prem for healthcare**: HIPAA often requires local processing
-2. **Diarization is essential**: who said what matters clinically
-3. **Hybrid extraction**: fast NER for structure, LLM for prose generation
-4. **Always have human review**: especially for clinical documentation
+**问：如何处理医学缩写和术语？**
+
+答：维护自定义词表，将缩写（PRN、BID、SOB）映射到完整术语。词表同时注入 ASR 模型（提高识别率）和 LLM Prompt（确保记录中正确展开）。
+
+**问：如果护士在句中纠正自己怎么办？**
+
+答：检测“其实我的意思是……”“不，等等，应该是……”等纠正模式，只使用纠正后的版本。存在冲突时，指示 LLM 优先采用后面的表述。
+
+**问：如何确保 AI 不遗漏关键信息？**
+
+答：我们通过“完整性检查”验证记录包含全部抽取实体。如果 NER 发现“胸痛”但 SOAP 记录没有提及，就标记给护士复核。我们还运行“安全关键”检测器，发现自杀意念、虐待或其他强制报告触发项时立即升级。
 
 ---
 
-*Related chapters: [Model Taxonomy](../02-model-landscape/01-model-taxonomy.md), [Reliability Patterns](../13-reliability-and-safety/03-reliability-patterns.md)*
+## 面试关键要点
+
+1. **医疗场景本地处理**：HIPAA 通常要求数据在本地处理。
+2. **说话人分离不可或缺**：临床上必须知道谁说了什么。
+3. **混合抽取**：用快速 NER 获取结构，用 LLM 生成文本。
+4. **始终保留人工复核**：尤其是临床文档。
+
+---
+
+*相关章节：[模型分类](../02-model-landscape/01-model-taxonomy.md)、[可靠性模式](../13-reliability-and-safety/03-reliability-patterns.md)*

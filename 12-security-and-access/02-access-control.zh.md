@@ -1,19 +1,17 @@
 # LLM 系统的访问控制
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
-
-Secure access control is essential for multi-user and multi-tenant LLM applications. This chapter covers authentication, authorization, and data isolation patterns.
+安全的访问控制是多用户、多租户 LLM 应用的基础。本章介绍认证、授权和数据隔离模式。
 
 ## 目录
 
-- [Access Control Requirements](#access-control-requirements)
-- [Authentication Patterns](#authentication-patterns)
-- [Authorization Models](#authorization-models)
-- [Tenant Isolation](#tenant-isolation)
-- [API Key Management](#api-key-management)
-- [Audit and Compliance](#audit-and-compliance)
-- [Interview Questions](#interview-questions)
-- [References](#references)
+- [访问控制要求](#access-control-requirements)
+- [认证模式](#authentication-patterns)
+- [授权模型](#authorization-models)
+- [租户隔离](#tenant-isolation)
+- [API Key 管理](#api-key-management)
+- [审计与合规](#audit-and-compliance)
+- [面试问题](#interview-questions)
+- [参考资料](#references)
 
 ---
 
@@ -21,21 +19,21 @@ Secure access control is essential for multi-user and multi-tenant LLM applicati
 
 ### 安全维度
 
-| Dimension | Description | Controls |
+| 维度 | 说明 | 控制措施 |
 |-----------|-------------|----------|
-| **Authentication** | Who is making the request? | API keys, OAuth, JWT |
-| **Authorization** | What can they do? | RBAC, ABAC, policies |
-| **Isolation** | What data can they see? | Tenant filtering, encryption |
-| **Audit** | What did they do? | Logging, compliance reports |
+| **认证** | 谁在发起请求？ | API Key、OAuth、JWT |
+| **授权** | 该用户能做什么？ | RBAC、ABAC、策略 |
+| **隔离** | 该用户能看到哪些数据？ | 租户过滤、加密 |
+| **审计** | 用户做了什么？ | 日志、合规报告 |
 
 ### LLM 特有关注点
 
-| Concern | Risk | Mitigation |
+| 关注点 | 风险 | 缓解方式 |
 |---------|------|------------|
-| Prompt injection | Bypass access controls | Input validation |
-| Data leakage | Cross-tenant exposure | Strict filtering |
-| Model output | Expose protected info | Output filtering |
-| Context pollution | Inject unauthorized data | Context validation |
+| Prompt 注入 | 绕过访问控制 | 输入校验 |
+| 数据泄露 | 跨租户暴露 | 严格过滤 |
+| 模型输出 | 暴露受保护信息 | 输出过滤 |
+| 上下文污染 | 注入未授权数据 | 上下文校验 |
 
 ---
 
@@ -414,75 +412,21 @@ class ComplianceReporter:
 
 ## 面试问题
 
-### Q: How do you implement multi-tenant isolation in a RAG system?
+### Q：如何在 RAG 系统中实现多租户隔离？
 
-**Strong answer:**
+**强回答：**多租户隔离需要纵深防御：每个向量的元数据都带 `tenant_id`，数据库查询必须按租户过滤，不能先检索全部数据再在应用层过滤；缓存键要带租户前缀，语义缓存也要按租户隔离；构造 Prompt 前验证所有上下文属于当前租户，绝不混合租户上下文；生成后还要做跨租户信息检查；所有访问记录租户上下文并监控跨租户尝试。核心原则是租户 ID 在每个数据访问点都是强制过滤条件，而不是可选参数。
 
-"Multi-tenant isolation requires defense in depth:
+### Q：如何管理 LLM 服务的 API Key？
 
-**Vector database level:**
-- Every vector includes tenant_id in metadata
-- All queries filter by tenant_id at the database level
-- Never filter after retrieval (data already leaked to memory)
-
-**Cache level:**
-- All cache keys prefixed with tenant_id
-- Semantic cache scoped to tenant
-- No cross-tenant cache hits even for identical queries
-
-**Prompt level:**
-- Validate context documents belong to requesting tenant before including
-- Never mix context from multiple tenants
-
-**Output level:**
-- Verify response does not contain cross-tenant information
-- Output filtering as additional safeguard
-
-**Audit:**
-- Log all access with tenant context
-- Monitor for cross-tenant access attempts
-
-The key principle: tenant_id is a mandatory filter at every data access point, not an optional parameter."
-
-### Q: How do you manage API keys for an LLM service?
-
-**Strong answer:**
-
-"Secure API key management:
-
-**Creation:**
-- Generate cryptographically random keys
-- Store only the hash, return raw key once
-- Associate with user, tenant, scopes, expiration
-
-**Validation:**
-- Hash incoming key, compare to stored hash
-- Check expiration and revocation status
-- Verify scopes match requested action
-
-**Rotation:**
-- Support key rotation with grace period
-- Old key works during transition (7 days)
-- Notify users of impending expiration
-
-**Security:**
-- Rate limit failed authentication attempts
-- Revoke immediately on suspected compromise
-- Audit all key operations
-
-**Scopes:**
-- Fine-grained: model access, operation type, daily limits
-- Least privilege by default
-
-The key principle: never store raw keys, support rotation, implement least privilege."
+**强回答：**创建时生成密码学安全的随机 Key，只保存哈希值并只返回一次原始 Key，同时绑定用户、租户、Scope 和过期时间。校验时对输入 Key 哈希，检查过期、撤销和 Scope。轮换时设置宽限期，旧 Key 继续工作 7 天并通知用户。对失败认证限流，疑似泄露时立即撤销，审计所有 Key 操作；默认采用最小权限，并按模型访问、操作类型和每日额度拆分细粒度 Scope。核心原则是绝不保存原始 Key、支持轮换并落实最小权限。
 
 ---
 
 ## 参考资料
 
-- OAuth 2.0: https://oauth.net/2/
-- OWASP API Security: https://owasp.org/API-Security/
+- OAuth 2.0：https://oauth.net/2/
+- OWASP API Security：https://owasp.org/API-Security/
 
 ---
 
-*Previous: [Security Fundamentals](01-llm-security.md)*
+*上一篇：[安全基础](01-llm-security.md)*

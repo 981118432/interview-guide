@@ -2,21 +2,21 @@
 
 本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
 
-A vertical-AI vendor serves 280 customers from a single base model plus per-tenant LoRA adapters, with isolated training, eval-as-PRD per tenant, and noisy-neighbor mitigation that keeps p99 latency under 1.2 seconds.
+一家垂直 AI 供应商通过单一基础模型加每租户 LoRA Adapter 服务 280 个客户，配合隔离训练、每租户“评测即 PRD”和噪声邻居缓解，将 p99 延迟保持在 1.2 秒以内。
 
-## The Business Problem
+## 业务问题
 
-A vertical SaaS vendor in legal-tech runs a contract-analysis product. Each of its 280 enterprise customers expects the model to respect their templates, their precedent corpus, and their preferred drafting style. Off-the-shelf prompting is not enough: customers run blind A/B tests against generic models and reject the product when output diverges from their house style. A separate fine-tuned model per tenant is also not viable: at 70B parameters, each model is 140 GB on disk and would require a dedicated H100 for serving, blowing the unit economics.
+一家法律科技垂直 SaaS 供应商运营合同分析产品。280 个企业客户都希望模型遵循各自模板、判例语料和起草风格。开箱即用的 Prompt 不够：客户会与通用模型做盲 A/B 测试，一旦输出偏离内部风格就拒绝产品。每租户单独微调也不可行：70B 参数模型每个占用 140GB 磁盘，并需要专用 H100 服务，单位经济性无法成立。
 
-Constraints from the May 2026 reality:
+2026 年 5 月的现实约束：
 
-- 280 paid tenants, doubling annually
-- Each tenant has 1,000 to 250,000 historical contract pairs (input plus preferred edit)
-- Tenants demand eval reports proving fit on their own test sets
-- Per-query latency budget: under 1.2 seconds p99
-- Tenants on different compliance regimes: SOC 2, ISO 27001, HIPAA, FedRAMP Moderate
+- 280 个付费租户，数量每年翻倍
+- 每个租户有 1000～250,000 对历史合同样本（输入 + 偏好的修改）
+- 租户要求评测报告，证明模型适合自己的测试集
+- 单次查询延迟预算：p99 低于 1.2 秒
+- 租户遵循不同合规制度：SOC 2、ISO 27001、HIPAA、FedRAMP Moderate
 
-The team picks per-tenant LoRA adapters on a shared base model. LoRA ([Hu et al., 2021](https://arxiv.org/abs/2106.09685)) and QLoRA ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314)) are mature; vLLM's multi-LoRA serving ([docs](https://docs.vllm.ai/en/latest/models/lora.html)) and SGLang's adapter swapping let many adapters share one base model in GPU memory. Anyscale and Together AI have both published production case studies on this pattern ([Anyscale 2024 post](https://www.anyscale.com/blog/fine-tuning-llms-lora-or-full-parameter-an-in-depth-analysis), [Together AI multi-LoRA serving](https://www.together.ai/blog/multi-lora-inference)).
+团队选择在共享基础模型上使用每租户 LoRA Adapter。LoRA（[Hu 等，2021](https://arxiv.org/abs/2106.09685)）和 QLoRA（[Dettmers 等，2023](https://arxiv.org/abs/2305.14314)）已经成熟；vLLM 的多 LoRA 服务（[文档](https://docs.vllm.ai/en/latest/models/lora.html)）和 SGLang 的 Adapter 切换允许多个 Adapter 共享 GPU 中的基础模型。Anyscale 和 Together AI 都发布过这一模式的生产案例（[Anyscale 2024 文章](https://www.anyscale.com/blog/fine-tuning-llms-lora-or-full-parameter-an-in-depth-analysis)、[Together AI 多 LoRA 服务](https://www.together.ai/blog/multi-lora-inference)）。
 
 ## 架构
 
@@ -50,70 +50,70 @@ flowchart TB
     end
 ```
 
-### Components
+### 组件
 
-| Layer | Tech | Purpose |
+| 层 | 技术 | 用途 |
 |-------|------|---------|
-| Base model | Llama 4 70B int8 | Shared across all tenants |
-| Adapter | LoRA r=16 on attention layers, ~120 MB per tenant | Per-tenant adaptation |
-| Training | DeepSpeed ZeRO-3 on 8x H100 nodes | Tenant-isolated jobs |
-| Serving | vLLM 0.7+ with PagedAttention and multi-LoRA | One base, many adapters |
-| Adapter store | S3 with per-tenant KMS keys | Encrypted at rest |
-| Eval store | Per-tenant golden set, run on every retrain | Eval-as-PRD per tenant |
+| 基础模型 | Llama 4 70B int8 | 所有租户共享 |
+| Adapter | 注意力层 LoRA r=16，每租户约 120 MB | 每租户适配 |
+| 训练 | 8 个 H100 节点上的 DeepSpeed ZeRO-3 | 租户隔离的任务 |
+| 服务 | 带 PagedAttention 和多 LoRA 的 vLLM 0.7+ | 一个基础模型、多个 Adapter |
+| Adapter 存储 | 使用每租户 KMS 密钥的 S3 | 静态加密 |
+| 评测存储 | 每租户黄金集，每次重训都运行 | 每租户“评测即 PRD” |
 
-### Data flow at training time
+### 训练时数据流
 
-1. Customer uploads training pairs through a per-tenant S3 bucket with a dedicated IAM role; KMS keys are per-tenant.
-2. The ETL job runs in a Kubernetes namespace scoped to that tenant; the node selector ensures it does not co-schedule with another tenant's job.
-3. Training runs on an 8x H100 pod for typically 4 to 10 hours per tenant; LoRA at r=16 fits in 80 GB per H100, leaving room for activation memory.
-4. Eval is run automatically against the tenant's golden set; if metrics regress beyond a threshold, the artifact is held in staging.
-5. The adapter artifact (about 120 MB for a 70B base with r=16 attention adapters) is uploaded to the registry and the metadata index is updated.
+1. 客户通过每租户 S3 Bucket 和专用 IAM 角色上传训练样本对；KMS 密钥也按租户划分。
+2. ETL 任务运行在该租户专属的 Kubernetes Namespace 中；节点选择器确保不会与其他租户任务共同调度。
+3. 训练通常在 8 个 H100 组成的 Pod 上运行 4～10 小时；r=16 的 LoRA 可放入每张 H100 的 80GB 显存，并为激活值留出空间。
+4. 自动使用租户黄金集运行评测；如果指标回归超过阈值，就把产物留在 Staging。
+5. 将 Adapter 产物（70B 基础模型配 r=16 注意力 Adapter 时约 120MB）上传到注册表并更新元数据索引。
 
-### Data flow at serving time
+### 服务时数据流
 
-1. Request hits the gateway with a tenant JWT.
-2. The router resolves the adapter version for that tenant.
-3. If the adapter is hot in GPU memory (LRU cache of 200 adapters per node), inference proceeds.
-4. If cold, the adapter is hot-swapped from S3 in 200 to 600 ms. We hide this latency by pre-warming based on tenant traffic patterns.
-5. vLLM runs the request with the adapter applied; PagedAttention shares KV cache across tenants safely because KV is request-scoped, not adapter-scoped.
+1. 请求携带租户 JWT 到达网关。
+2. 路由器解析该租户对应的 Adapter 版本。
+3. 如果 Adapter 已热加载到 GPU 内存（每节点缓存 200 个 Adapter 的 LRU），就直接推理。
+4. 如果未加载，则在 200～600ms 内从 S3 热切换 Adapter。我们根据租户流量模式预热，以隐藏这段延迟。
+5. vLLM 应用 Adapter 执行请求；PagedAttention 安全地跨租户共享 KV Cache，因为 KV 按请求而不是按 Adapter 作用域隔离。
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. LoRA r=16 over full fine-tuning
+### 1. 选择 LoRA r=16，而不是全量微调
 
-A full 70B fine-tune per tenant costs about $4,500 in compute, produces a 140 GB artifact, and pins one H100. LoRA at r=16 costs $80 to $400 per tenant per retrain, produces a 120 MB artifact, and shares the GPU. The accuracy gap on our internal contract-analysis eval is 1.6 points on a 100-point composite. We accept that gap because the cost differential is 50x and the operational story (hot-swap, ephemeral artifacts) is dramatically simpler. The Anyscale post linked above ran a similar comparison and reached the same conclusion.
+每租户进行一次完整 70B 微调需要约 $4500 计算成本，生成 140GB 产物并独占一张 H100。r=16 的 LoRA 每租户每次重训成本为 $80～$400，产物仅 120MB，而且可以共享 GPU。在内部合同分析评测中，二者在 100 分综合指标上的准确率差距为 1.6 分。我们接受这个差距，因为成本相差 50 倍，且热切换、临时产物等运维流程简单得多。上面链接的 Anyscale 文章进行了类似比较，也得出了相同结论。
 
-### 2. Adapter swap budget and the noisy-neighbor problem
+### 2. Adapter 切换预算与噪声邻居问题
 
-vLLM's multi-LoRA support keeps adapters in GPU memory but each adapter consumes a few hundred MB. On an 80 GB H100 running a 70B base in int8 (about 40 GB), we have roughly 30 GB for adapters and KV cache. That budgets to roughly 200 adapters resident at once. We use LRU with traffic-aware pre-warming and tail-tenant pinning: the 30 tenants with strict latency SLAs are pinned and never evicted; the rest rotate. A tenant whose adapter is cold pays a 200 to 600 ms tail penalty. We surface that explicitly in the tenant SLA as a cold-start budget.
+vLLM 的多 LoRA 支持会把 Adapter 保留在 GPU 内存中，但每个 Adapter 占用几百 MB。在 80GB H100 上以 int8 运行约 40GB 的 70B 基础模型后，约有 30GB 可分配给 Adapter 和 KV Cache，因此一次约可驻留 200 个 Adapter。我们结合流量感知预热和尾部租户固定使用 LRU：30 个延迟 SLA 严格的租户固定在缓存中，不会被驱逐；其余 Adapter 轮换。Adapter 未热加载的租户需要承担 200～600ms 的尾延迟，我们会在租户 SLA 中明确列为冷启动预算。
 
-The noisy-neighbor failure: one tenant suddenly bursts to 10x normal traffic, pushing other adapters out of cache. Mitigation: per-tenant token-bucket rate limit at the gateway, plus dynamic adapter eviction protection for any adapter that served traffic in the last 60 seconds.
+噪声邻居故障是指某个租户突然产生 10 倍于正常水平的流量，把其他 Adapter 挤出缓存。缓解措施是网关按租户执行 Token Bucket 限流，并对过去 60 秒内服务过流量的 Adapter 动态启用驱逐保护。
 
-### 3. Per-tenant eval suite as the gate
+### 3. 每租户评测套件作为闸门
 
-We treat the tenant's golden set as the product requirements document. The training pipeline runs the new adapter against that set after every retrain; if metrics regress more than 2 points on the composite, the artifact is held and a Slack ping goes to the tenant's CSM. This is the "eval-as-PRD" pattern Hamel Husain has written about ([How to construct domain-specific evals](https://hamel.dev/blog/posts/evals/)) and we extend it to be per-tenant. Each tenant's golden set is curated jointly with their legal team during onboarding (a 60- to 90-minute workshop) and refreshed quarterly.
+我们把租户黄金集当作产品需求文档。每次重训后，训练流水线都用它评测新 Adapter；如果综合指标回归超过 2 分，就暂缓产物，并向租户 CSM 发送 Slack 提醒。这是 Hamel Husain 介绍的“评测即 PRD”模式（[如何构建领域评测](https://hamel.dev/blog/posts/evals/)），我们将它扩展为每租户一套。每个租户的黄金集在入驻时与其法务团队共同整理（60～90 分钟工作坊），并按季度刷新。
 
-### 4. Training-time isolation via Kubernetes namespaces plus network policy
+### 4. 通过 Kubernetes Namespace 和网络策略隔离训练
 
-Multi-tenancy is a defense-in-depth problem. Training jobs run in per-tenant namespaces; network policies prevent egress to anything other than that tenant's S3 prefix and the central metric service; node selectors prevent co-scheduling. We also use a dedicated KMS key per tenant for both bucket encryption and model artifact encryption. A leaked artifact decryption key would expose one tenant, not all.
+多租户是一个需要纵深防御的问题。训练任务运行在每租户 Namespace 中；网络策略禁止访问该租户 S3 前缀和中央指标服务之外的地址；节点选择器禁止共同调度。我们还为每租户配置专用 KMS 密钥，同时用于 Bucket 加密和模型产物加密。即使某个产物解密密钥泄露，也只会暴露一个租户，而不是全部租户。
 
-### 5. Serving-time isolation: shared GPU is okay, KV cache is not
+### 5. 服务时隔离：GPU 可以共享，KV Cache 不能共享
 
-The base model is shared. The adapter is per-tenant. The KV cache is per-request. PagedAttention ([vLLM paper](https://arxiv.org/abs/2309.06180)) ensures KV blocks are isolated per request, so even though Tenant A and Tenant B share a GPU during a single inference batch, their attention computations and KV state do not mix. We audited this with red-team prompts: no cross-tenant leakage in 50K adversarial pairs.
+基础模型共享，Adapter 按租户划分，KV Cache 按请求划分。PagedAttention（[vLLM 论文](https://arxiv.org/abs/2309.06180)）保证 KV 块按请求隔离，因此即使租户 A 和 B 在同一个推理批次中共享 GPU，注意力计算和 KV 状态也不会混合。我们用红队 Prompt 审计过这一点：5 万对对抗样本中没有跨租户泄露。
 
-### 6. Model lifecycle and base-model refresh
+### 6. 模型生命周期与基础模型刷新
 
-The base model is upgraded every 6 to 9 months. When the upgrade happens, all adapters must be re-trained against the new base. We run the re-train automatically using each tenant's stored training data; we run their eval suite; we ask the tenant to sign off before promoting. The full base-refresh cycle takes about 3 weeks for 280 tenants on 4 dedicated training nodes; we share the schedule publicly. Adapters that fail eval are flagged for manual review and the previous base+adapter pair stays in service until resolution.
+基础模型每 6～9 个月升级一次。升级时，所有 Adapter 都必须针对新基础模型重训。我们使用每租户保存的训练数据自动重训，运行其评测套件，并在提升版本前请求租户签字确认。280 个租户在 4 个专用训练节点上的完整基础模型刷新周期约需 3 周，计划会公开共享。评测失败的 Adapter 标记为人工复核，在问题解决前继续使用旧的基础模型 + Adapter 组合。
 
-### 7. Why r=16 specifically
+### 7. 为什么具体选择 r=16
 
-Reading the LoRA paper carelessly suggests r=4 or r=8 is the standard choice. We did the sweep on our domain: r=4 underfits on tenants with 50K+ training pairs; r=8 is acceptable; r=16 captures 95 percent of the gain available from going to r=32. r=32 doubles artifact size and training cost for less than 1 point of metric. We standardized at r=16 across attention layers (Q, K, V, O) and skip the MLP layers. This is the same configuration the [Anyscale post](https://www.anyscale.com/blog/fine-tuning-llms-lora-or-full-parameter-an-in-depth-analysis) recommends for similar workloads.
+如果不仔细阅读 LoRA 论文，容易认为 r=4 或 r=8 是标准选择。我们在自己的领域做了扫描：对于拥有 5 万对以上训练样本的租户，r=4 欠拟合；r=8 可以接受；r=16 已获得提升到 r=32 时 95% 的收益。r=32 让产物大小和训练成本翻倍，但指标提升不到 1 分。我们统一在注意力层（Q、K、V、O）使用 r=16，并跳过 MLP 层。这与 [Anyscale 文章](https://www.anyscale.com/blog/fine-tuning-llms-lora-or-full-parameter-an-in-depth-analysis)对类似负载的建议一致。
 
-### 8. Cold start engineering
+### 8. 冷启动工程
 
-Hot-swap from S3 takes 200 to 600 ms cold. We hide this with traffic-aware pre-warming: a sidecar process reads the previous 60 minutes of tenant traffic and pre-loads the top 50 cold adapters at minute boundaries. Pre-warm hit rate is 78 percent measured against tail latency; the remaining cold misses are usually new tenants or tenants returning from idle, both of which are acceptable to penalize.
+从 S3 冷启动热切换需要 200～600ms。我们使用流量感知预热隐藏这段延迟：Sidecar 进程读取过去 60 分钟的租户流量，在每个整分预加载排名前 50 的冷 Adapter。按尾延迟测得预热命中率为 78%；剩余冷未命中通常来自新租户或从空闲状态回归的租户，这两类情况可以接受冷启动惩罚。
 
-## Tenant Lifecycle Sequence
+## 租户生命周期时序
 
 ```mermaid
 sequenceDiagram
@@ -139,104 +139,104 @@ sequenceDiagram
     P->>T: Promote and sign-off
 ```
 
-## Failure Modes and Mitigations
+## 失败模式与缓解措施
 
-### F1: Adapter quality regression after retrain
+### F1：重训后 Adapter 质量回归
 
-A retrain produces a worse model on the tenant's golden set than the previous version. Mitigation: the eval-gate blocks promotion; the previous adapter stays live; an alert goes to the team and the tenant. We retain the previous 3 adapter versions per tenant for rollback. Median time to rollback: 6 minutes.
+重训后的模型在租户黄金集上比上一版本更差。缓解措施是评测闸门阻止提升版本，继续使用旧 Adapter，并告警团队和租户。每租户保留最近 3 个 Adapter 版本用于回滚。回滚时间中位数为 6 分钟。
 
-### F2: Cross-tenant data bleed at training time
+### F2：训练时跨租户数据串扰
 
-A bug in the ETL pipeline reads from the wrong tenant's S3 bucket. Mitigation: IAM roles scoped per tenant; the training job assumes the tenant's role on launch and has zero credentials to other buckets. A regression test verifies that a job running under Tenant A's role cannot list Tenant B's bucket; it runs on every CI build.
+ETL 流水线 Bug 导致任务读取错误租户的 S3 Bucket。缓解措施是按租户限定 IAM 角色；训练任务启动时承担该租户角色，完全没有访问其他 Bucket 的凭据。回归测试验证使用租户 A 角色运行的任务无法列出租户 B 的 Bucket，并在每次 CI 构建时运行。
 
-### F3: Adapter cache thrash under traffic spike
+### F3：流量尖峰下 Adapter 缓存抖动
 
-A trade-show drives 30 tenants to spike simultaneously, evicting most other adapters. p99 latency spikes from 1.1 s to 4.8 s. Mitigation: gateway rate-limits each tenant; the cache uses pinned slots for top-tier tenants; we keep 20 percent of cache capacity in reserve. When a known event is on the calendar, we pre-warm at off-peak.
+一次行业展会让 30 个租户同时流量激增，驱逐了大多数其他 Adapter，p99 延迟从 1.1 秒升至 4.8 秒。缓解措施是网关按租户限流；缓存为高等级租户使用固定槽位；预留 20% 缓存容量。日历中有已知活动时，我们在低峰期预热。
 
-### F4: Bad training data poisons the adapter
+### F4：错误训练数据污染 Adapter
 
-A tenant accidentally uploads contracts that contain customer PII or are from the wrong jurisdiction. The adapter overfits to bad patterns. Mitigation: an automated PII detector runs on inputs before training; eval suite catches drift on jurisdiction-specific cases; tenants can sample-inspect their training set in the dashboard before kicking off a retrain.
+租户误上传含客户 PII 或属于错误司法辖区的合同，导致 Adapter 过拟合错误模式。缓解措施是训练前对输入运行自动 PII 检测；评测套件通过特定司法辖区案例捕获漂移；租户可以在发起重训前通过仪表盘抽查训练集。
 
-### F5: Base-model upgrade breaks legacy adapters
+### F5：基础模型升级破坏旧 Adapter
 
-The new base model has a different tokenizer or layer naming, and the adapter's matrix shapes no longer apply. Mitigation: every base upgrade is treated as a mandatory retrain. We never serve an adapter against a base it was not trained on. A guard in the serving plane refuses to load an adapter without a matching base version.
+新基础模型使用不同的 Tokenizer 或层命名，Adapter 的矩阵形状不再适用。缓解措施是把每次基础模型升级都视为强制重训。我们绝不让 Adapter 服务于它未训练过的基础模型；服务层守卫会拒绝加载没有匹配基础版本的 Adapter。
 
-### F6: Cost runaway in training plane
+### F6：训练平面成本失控
 
-A misconfigured job loops in a training step and consumes 80 H100-hours without producing a checkpoint. Mitigation: per-tenant monthly training budget; per-job timeout (24 hours hard cap); a watchdog that pages SRE if loss plateau is detected for more than 2 hours. We have aborted 14 such jobs in the last 6 months.
+配置错误的任务在某个训练步骤循环，消耗 80 个 H100 小时却没有生成检查点。缓解措施是每租户月度训练预算、每任务超时（硬上限 24 小时），以及检测到损失超过 2 小时不再下降就通知 SRE 的 Watchdog。过去 6 个月我们中止了 14 个此类任务。
 
-### F7: GPU node failure mid-training
+### F7：训练中 GPU 节点故障
 
-A hardware fault on one of the 8 H100s mid-training crashes the job. Mitigation: DeepSpeed checkpointing every 30 minutes; auto-resume on a fresh node; we maintain a small reserve pool of warm spare nodes. Mean recovery time: 18 minutes. Job-level retry budget: 3 attempts before alerting humans.
+训练期间 8 张 H100 中的一张发生硬件故障，导致任务崩溃。缓解措施是 DeepSpeed 每 30 分钟保存检查点，在新节点上自动恢复，并维护少量已预热备用节点。平均恢复时间为 18 分钟；任务级重试预算为 3 次，超过后通知人工。
 
-### F8: Adapter signing key rotation breaks legacy clients
+### F8：Adapter 签名密钥轮换破坏旧客户端
 
-We sign adapter manifests for tamper detection. Rotating the signing key without coordination breaks the serving plane's verification step. Mitigation: dual-signing during the rotation window; clients accept either old or new key for 7 days; only after all clients verify on the new key do we retire the old.
+我们为 Adapter 清单签名以检测篡改。未协调地轮换签名密钥会破坏服务层验证。缓解措施是在轮换窗口内双重签名；客户端 7 天内同时接受新旧密钥；所有客户端都用新密钥验证后才废弃旧密钥。
 
-### F9: Tenant cross-contamination via shared eval infrastructure
+### F9：共享评测基础设施造成租户交叉污染
 
-The eval runner accidentally writes eval results to the wrong tenant's metric bucket. Mitigation: per-tenant credentials for eval result publishing; a write-time tenant-id check verifies the destination matches the running job's tenant; mismatches refuse the write and alert.
+评测运行器误将结果写入错误租户的指标 Bucket。缓解措施是按租户提供发布评测结果的凭据；写入时检查租户 ID，验证目标与运行任务的租户一致；不一致则拒绝写入并告警。
 
-### F10: Adapter version sprawl
+### F10：Adapter 版本泛滥
 
-After 3 years and 280 tenants we have over 10,000 adapter versions in the registry. Storage is cheap but the metadata service grinds. Mitigation: tiered storage with old versions auto-archived to cold storage after 90 days; metadata service indexes only current plus previous-3 versions per tenant; cold-archive retrieval has a 1-minute SLA for rollback scenarios.
+3 年后，280 个租户在注册表中产生了超过 1 万个 Adapter 版本。存储便宜，但元数据服务负载很高。缓解措施是分层存储：旧版本 90 天后自动归档到冷存储；元数据服务每租户只索引当前版本和前 3 个版本；回滚场景下冷归档取回 SLA 为 1 分钟。
 
-### F11: Adapter checksum mismatch on serving load
+### F11：服务加载时 Adapter 校验和不匹配
 
-A network blip during S3 hot-swap corrupts the adapter bytes; vLLM loads it but inference produces nonsense. Mitigation: every adapter has a SHA-256 checksum in the metadata; the serving plane verifies the checksum on load and refuses to serve a mismatched adapter; an alert pages SRE and the load is retried.
+S3 热切换期间网络抖动损坏 Adapter 字节，vLLM 虽然加载成功，但推理结果无意义。缓解措施是在元数据中记录每个 Adapter 的 SHA-256 校验和；服务层加载时验证校验和，拒绝服务于不匹配的 Adapter；同时通知 SRE 并重试加载。
 
-## Operational Considerations
+## 运维考虑
 
-### Monitoring and SLOs
+### 监控与 SLO
 
-| SLO | Target | What we measure |
+| SLO | 目标 | 测量内容 |
 |-----|--------|-----------------|
-| Serving p99 latency | under 1.2 s, warm | 95 percent of tenants warm-cached at any time |
-| Cold-start p99 | under 1.0 s additive | adapter S3 load time |
-| Train-job success rate | over 98 percent | jobs reaching adapter promotion |
-| Eval gate pass rate | over 90 percent | adapters clearing tenant golden set |
-| Cross-tenant audit findings | 0 | automated quarterly red-team |
+| 服务 p99 延迟 | 热缓存时低于 1.2 秒 | 任意时刻 95% 的租户都有热缓存 |
+| 冷启动 p99 | 额外低于 1.0 秒 | Adapter 从 S3 加载的时间 |
+| 训练任务成功率 | 超过 98% | 达到 Adapter 提升阶段的任务 |
+| 评测闸门通过率 | 超过 90% | 通过租户黄金集的 Adapter |
+| 跨租户审计发现 | 0 | 每季度自动红队 |
 
-### Cost model
+### 成本模型
 
-Per-tenant economics at our blended traffic:
+按当前混合流量计算的每租户经济性：
 
-- Training: $80 to $400 per retrain; quarterly refresh
-- Serving: shared GPUs; per-token cost $0.18 per million input, $0.36 per million output (close to vendor-equivalent on Llama 4)
-- Adapter storage: $0.04 per tenant per month at 120 MB
-- Eval: $5 per retrain
-- Total per tenant: $80 to $800 per quarter, depending on traffic
+- 训练：每次重训 $80～$400；每季度刷新
+- 服务：共享 GPU；每百万输入 Token $0.18，每百万输出 Token $0.36（接近 Llama 4 供应商等价价格）
+- Adapter 存储：每租户 120MB，每月 $0.04
+- 评测：每次重训 $5
+- 每租户合计：每季度 $80～$800，取决于流量
 
-At 280 tenants, monthly compute is approximately $180K, against gross revenue of $720K, which is on plan for a 75 percent gross margin.
+280 个租户时，月度计算成本约 $180K，毛收入为 $720K，符合 75% 毛利率的计划。
 
-### On-call playbook
+### 值班手册
 
-- p99 spike across many tenants: check adapter cache hit rate; if low, throttle bursty tenants and pre-warm hot set.
-- Single-tenant regression alert: check eval delta; if real, roll back to previous adapter; ping CSM.
-- Training queue backlog: scale up training nodes (we keep 2 standby); if persistent, page platform team for capacity planning.
-- Training job stuck: check checkpoint timestamps; if no progress in 2 hours, kill and resume from last checkpoint; loss-curve anomaly may indicate bad data.
-- Tenant onboarding bottleneck: the eval workshop is the long pole; we schedule with 3-week lead time and keep a backlog of pre-built golden-set templates.
+- 多租户 p99 同时飙升：检查 Adapter 缓存命中率；如果较低，就限制突发租户并预热热点集合。
+- 单租户回归告警：检查评测差异；确认真实回归后回滚到旧 Adapter，并通知 CSM。
+- 训练队列积压：扩充训练节点（保留 2 个待命节点）；若持续存在，通知平台团队做容量规划。
+- 训练任务卡住：检查检查点时间戳；2 小时没有进展就终止并从最近检查点恢复；损失曲线异常可能表示数据错误。
+- 租户入驻瓶颈：评测工作坊是最长环节；提前 3 周排期，并维护预构建黄金集模板的待办队列。
 
-### Onboarding ritual
+### 入驻流程
 
-New tenant onboarding takes 4 to 6 weeks: 1 week for legal and DPA review, 1 week for the eval-set workshop, 2 weeks for first training, 1 week for canary rollout. We document each tenant's onboarding in a runbook and the CSM owns the calendar. The eval workshop is the highest-leverage hour: it is where the customer's domain experts encode their judgments into our test set.
+新租户入驻需要 4～6 周：法务和 DPA 审查 1 周，评测集工作坊 1 周，首次训练 2 周，Canary 发布 1 周。我们在 Runbook 中记录每个租户的入驻过程，由 CSM 负责日程。评测工作坊是杠杆率最高的一小时，因为客户领域专家会在这里把判断标准编码进我们的测试集。
 
-### Tenant offboarding
+### 租户退出
 
-Offboarding is a clean operation: we delete the tenant's training data, retire all adapter versions to a 90-day cold archive (in case of dispute), revoke their KMS keys after 90 days, and provide a deletion certificate. The pipeline is automated; the CSM signs off.
+租户退出是一个可控流程：删除租户训练数据，把所有 Adapter 版本移入保留 90 天的冷归档（以处理争议），90 天后撤销其 KMS 密钥，并提供删除证明。整个流水线自动化，由 CSM 签字确认。
 
-### Compliance posture
+### 合规状态
 
-We hold SOC 2 Type II and are certified for ISO 27001. Customer audit packs include: per-tenant data residency proof, encryption-at-rest evidence with KMS key IDs, training-job logs, and eval reports. We auto-generate the pack from the platform monthly.
+我们持有 SOC 2 Type II，并通过 ISO 27001 认证。客户审计包包括：每租户数据驻留证明、带 KMS 密钥 ID 的静态加密证据、训练任务日志和评测报告。平台每月自动生成审计包。
 
-## What Strong Interview Candidates Cover
+## 优秀面试候选人应覆盖的内容
 
-- They cite vLLM's multi-LoRA serving and PagedAttention by name, and explain why KV cache isolation is the linchpin for shared-GPU multi-tenancy.
-- They distinguish eval-as-PRD per tenant from a single global eval; the former is mandatory for vertical AI.
-- They size the LoRA-vs-full-FT tradeoff with concrete numbers (cost ratio, accuracy gap, artifact size).
-- They name the noisy-neighbor problem and at least three mitigations (rate limit, pinning, eviction protection).
-- They walk through the base-model refresh ritual; this is the unsexy operational reality that distinguishes shipped platforms from prototypes.
-- They explicitly handle the rank-selection question (why r=16 and not r=4 or r=32) with empirical numbers, not folklore.
+- 能说出 vLLM 多 LoRA 服务和 PagedAttention，并解释 KV Cache 隔离为何是共享 GPU 多租户的关键。
+- 区分每租户“评测即 PRD”和单一全局评测；对于垂直 AI，前者是必须的。
+- 用具体数字说明 LoRA 与全量微调的权衡（成本比例、准确率差距、产物大小）。
+- 明确指出噪声邻居问题，并至少给出三种缓解措施（限流、固定槽位、驱逐保护）。
+- 说明基础模型刷新流程；这是区分已上线平台与原型的朴素运维现实。
+- 用实证数字回答秩选择问题（为什么是 r=16 而非 r=4 或 r=32），而不是诉诸经验传闻。
 
 ## 参考资料
 
@@ -252,4 +252,4 @@ We hold SOC 2 Type II and are certified for ISO 27001. Customer audit packs incl
 - [SGLang adapter swapping](https://github.com/sgl-project/sglang)
 - [Kubernetes Multi-Tenancy WG patterns](https://github.com/kubernetes-sigs/multi-tenancy)
 
-Related chapters: [LoRA and Fine-Tuning](../03-training-and-adaptation/03-lora-qlora-peft.md), [Multi-Tenant Isolation](../12-security-and-access/02-access-control.md), [Inference Optimization](../04-inference-optimization/01-inference-fundamentals.md).
+相关章节：[LoRA 与微调](../03-training-and-adaptation/03-lora-qlora-peft.md)、[多租户隔离](../12-security-and-access/02-access-control.md)、[推理优化](../04-inference-optimization/01-inference-fundamentals.md)。

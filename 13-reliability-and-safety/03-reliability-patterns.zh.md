@@ -1,20 +1,18 @@
 # 可靠性模式
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
-
-Production LLM systems need robust reliability patterns beyond basic retry logic. This chapter covers advanced patterns for building resilient AI applications.
+生产级 LLM 系统需要超越基础重试逻辑的可靠性模式。本章介绍构建韧性 AI 应用的高级模式。
 
 ## 目录
 
-- [Reliability Challenges](#reliability-challenges)
-- [Retry Patterns](#retry-patterns)
-- [Circuit Breaker](#circuit-breaker)
-- [Bulkhead Pattern](#bulkhead-pattern)
-- [Timeout Strategies](#timeout-strategies)
-- [Graceful Degradation](#graceful-degradation)
-- [Multi-Provider Failover](#multi-provider-failover)
-- [Interview Questions](#interview-questions)
-- [References](#references)
+- [可靠性挑战](#reliability-challenges)
+- [重试模式](#retry-patterns)
+- [熔断器](#circuit-breaker)
+- [舱壁模式](#bulkhead-pattern)
+- [超时策略](#timeout-strategies)
+- [优雅降级](#graceful-degradation)
+- [多供应商故障转移](#multi-provider-failover)
+- [面试问题](#interview-questions)
+- [参考资料](#references)
 
 ---
 
@@ -22,22 +20,22 @@ Production LLM systems need robust reliability patterns beyond basic retry logic
 
 ### LLM 特有故障模式
 
-| Failure Mode | Cause | Impact |
+| 故障模式 | 原因 | 影响 |
 |--------------|-------|--------|
-| Rate limiting | Quota exceeded | Request rejection |
-| Timeouts | Long generation, network issues | Slow/failed responses |
-| Provider outage | Infrastructure issues | Complete failure |
-| Quality degradation | Model updates, load | Worse outputs |
-| Context overflow | Input too large | Request failure |
-| Malformed output | Generation errors | Parsing failures |
+| 限流 | 超出配额 | 请求被拒绝 |
+| 超时 | 生成时间长、网络问题 | 响应变慢/失败 |
+| 供应商宕机 | 基础设施问题 | 完全不可用 |
+| 质量下降 | 模型更新、负载 | 输出变差 |
+| 上下文溢出 | 输入过大 | 请求失败 |
+| 输出格式错误 | 生成错误 | 解析失败 |
 
 ### 可靠性目标
 
-| Tier | Availability | Latency p99 | Examples |
+| 层级 | 可用性 | 延迟 p99 | 示例 |
 |------|--------------|-------------|----------|
-| Critical | 99.99% | < 3s | Payment processing |
-| Standard | 99.9% | < 10s | Customer support |
-| Best effort | 99% | < 30s | Background tasks |
+| 关键 | 99.99% | < 3s | 支付处理 |
+| 标准 | 99.9% | < 10s | 客户支持 |
+| 尽力而为 | 99% | < 30s | 后台任务 |
 
 ---
 
@@ -550,51 +548,51 @@ class HedgedRequest:
 
 ## 面试问题
 
-### Q: How do you design for high availability in LLM systems?
+### Q：如何为 LLM 系统设计高可用？
 
-**Strong answer:**
+**强回答：**
 
-"I use multiple layers of reliability:
+“我会使用多层可靠性机制：
 
-**Retry with backoff:** Exponential backoff with jitter for transient failures. Important to distinguish retryable (rate limits, timeouts) from non-retryable (auth, bad request) errors.
+**带退避的重试：**对瞬时故障使用带抖动的指数退避。必须区分可重试错误（限流、超时）和不可重试错误（认证失败、错误请求）。
 
-**Circuit breaker:** If a provider fails repeatedly, stop trying for a cooldown period. This prevents wasting latency on a dead provider and gives it time to recover.
+**熔断器：**供应商反复失败时，在冷却窗口内停止尝试，避免在失效供应商上浪费延迟并给它恢复时间。
 
-**Multi-provider failover:** Never depend on a single provider. I configure primary/secondary/tertiary with automatic failover. Each provider has its own circuit breaker.
+**多供应商故障转移：**绝不依赖单一供应商。配置主/次/第三供应商并自动转移，每个供应商都有自己的熔断器。
 
-**Graceful degradation:** Define what happens when no providers are available. Better to return a degraded response (simpler model, cached result) than to fail completely.
+**优雅降级：**明确所有供应商不可用时的行为。返回降级响应（更简单的模型或缓存结果）通常优于完全失败。
 
-**Bulkheading:** Isolate different workloads. A batch processing surge should not take down real-time queries.
+**舱壁隔离：**隔离不同负载，批处理流量激增不能拖垮实时查询。
 
-The key insight is assuming failure. LLM APIs are less reliable than traditional APIs. Design as if the provider will go down, because it will."
+关键洞察是主动假设会失败。LLM API 比传统 API 更不可靠，应按供应商一定会宕机来设计。”
 
-### Q: What is the difference between circuit breaker and retry?
+### Q：熔断器和重试有什么区别？
 
-**Strong answer:**
+**强回答：**
 
-"They solve different problems:
+“它们解决的是不同问题：
 
-**Retry** handles transient failures. If a single request fails, try again. It assumes failures are independent and the next attempt may succeed.
+**重试**处理瞬时故障：单个请求失败后再次尝试，假设故障相互独立、下一次可能成功。
 
-**Circuit breaker** handles systemic failures. If many requests are failing, stop trying entirely. It assumes the downstream system is unhealthy and repeated attempts waste resources and slow recovery.
+**熔断器**处理系统性故障：大量请求失败时完全停止尝试，假设下游不健康，继续请求只会浪费资源并拖慢恢复。
 
-**How they work together:**
+**两者如何配合：**
 1. Request fails → retry with backoff (attempt 1, 2, 3)
 2. If all retries fail → circuit breaker records failure
 3. After N failures → circuit opens, rejects requests immediately
 4. After timeout → circuit half-opens, allows limited test requests
 5. If tests succeed → circuit closes, normal operation resumes
 
-Without circuit breaker: during an outage, every request waits through all retries before failing. Latency spikes, resources exhausted.
+没有熔断器时，宕机期间每个请求都要经历全部重试才失败，延迟飙升并耗尽资源。
 
-With circuit breaker: after detecting the outage, requests fail fast. System remains responsive, can fail over to alternatives."
+有熔断器时，检测到宕机后请求快速失败，系统保持响应能力并可转移到备用方案。”
 
 ---
 
 ## 参考资料
 
-- Microsoft Resilience Patterns: https://learn.microsoft.com/en-us/azure/architecture/patterns/
-- Netflix Hystrix: https://github.com/Netflix/Hystrix
+- Microsoft 可靠性模式：https://learn.microsoft.com/en-us/azure/architecture/patterns/
+- Netflix Hystrix：https://github.com/Netflix/Hystrix
 
 ---
 

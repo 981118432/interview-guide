@@ -1,22 +1,22 @@
 # LLM 评测
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-Evaluating LLM systems is fundamentally different from traditional ML. This chapter covers metrics, methodologies, and practical approaches for measuring quality in production. It is about evaluating *your* system; for how to read public model benchmarks like MMLU, SWE-bench, and Arena Elo, see [Benchmarks and Leaderboards](03-benchmarks-and-leaderboards.md).
+LLM 系统的评测从根本上不同于传统机器学习。本章介绍生产环境中衡量质量的指标、方法论和实践路径，重点是评测*你的系统*；如果要了解如何阅读 MMLU、SWE-bench、Arena Elo 等公开模型基准，请参阅[基准与排行榜](03-benchmarks-and-leaderboards.md)。
 
 ## 目录
 
-- [Why LLM Evaluation Is Hard](#why-llm-evaluation-is-hard)
-- [Evaluation Dimensions](#evaluation-dimensions)
-- [Automated Evaluation Methods](#automated-evaluation-methods)
-- [LLM-as-Judge](#llm-as-judge)
-- [Human Evaluation](#human-evaluation)
-- [RAG-Specific Evaluation](#rag-specific-evaluation)
-- [Building Evaluation Pipelines](#building-evaluation-pipelines)
-- [Production Monitoring](#production-monitoring)
-- [2026 Eval Evolution: Beyond LLM-as-Judge](#2026-eval-evolution-beyond-llm-as-judge)
-- [Interview Questions](#interview-questions)
-- [References](#references)
+- [LLM 评测为何困难](#why-llm-evaluation-is-hard)
+- [评测维度](#evaluation-dimensions)
+- [自动评测方法](#automated-evaluation-methods)
+- [LLM 评审](#llm-as-judge)
+- [人工评测](#human-evaluation)
+- [RAG 专项评测](#rag-specific-evaluation)
+- [构建评测流水线](#building-evaluation-pipelines)
+- [生产监控](#production-monitoring)
+- [2026 年评测演进：超越 LLM 评审](#2026-eval-evolution-beyond-llm-as-judge)
+- [面试问题](#interview-questions)
+- [参考资料](#references)
 
 ---
 
@@ -24,24 +24,24 @@ Evaluating LLM systems is fundamentally different from traditional ML. This chap
 
 ### 根本挑战
 
-Traditional ML has clear metrics (accuracy, F1, AUC). LLM outputs are open-ended text where "correct" is subjective.
+传统机器学习有明确的指标（准确率、F1、AUC），而 LLM 输出是开放式文本，“正确”往往带有主观性。
 
-| Traditional ML | LLM Systems |
+| 传统机器学习 | LLM 系统 |
 |----------------|-------------|
-| Single correct answer | Many valid responses |
-| Objective metrics | Subjective quality |
-| Easy to automate | Requires judgment |
-| Static test sets | Need diverse scenarios |
+| 单一正确答案 | 存在多个有效回答 |
+| 客观指标 | 主观质量 |
+| 易于自动化 | 需要判断 |
+| 静态测试集 | 需要多样化场景 |
 
 ### 多维质量
 
-A response can be:
-- Correct but poorly written
-- Well-written but incomplete
-- Complete but not relevant
-- Relevant but unsafe
+一个回答可能：
+- 事实正确但表达糟糕；
+- 表达流畅但不完整；
+- 内容完整但不相关；
+- 相关但不安全。
 
-You need to measure multiple dimensions independently.
+因此需要独立衡量多个质量维度。
 
 ---
 
@@ -49,32 +49,32 @@ You need to measure multiple dimensions independently.
 
 ### 核心维度
 
-| Dimension | What It Measures | How to Evaluate |
+| 维度 | 衡量内容 | 评测方式 |
 |-----------|------------------|-----------------|
-| **Correctness** | Factually accurate? | Ground truth, LLM judge |
-| **Relevance** | Answers the question? | LLM judge, human |
-| **Completeness** | All aspects covered? | Checklist, LLM judge |
-| **Coherence** | Well-structured, logical? | LLM judge, human |
-| **Conciseness** | Appropriately brief? | Token count, LLM judge |
-| **Safety** | No harmful content? | Classifiers, LLM judge |
-| **Helpfulness** | Actually useful? | Human feedback |
+| **正确性** | 事实是否准确？ | 标准答案、LLM 评审 |
+| **相关性** | 是否回答了问题？ | LLM 评审、人工 |
+| **完整性** | 是否覆盖全部方面？ | 检查清单、LLM 评审 |
+| **连贯性** | 结构清晰且合乎逻辑？ | LLM 评审、人工 |
+| **简洁性** | 长度是否恰当？ | Token 数、LLM 评审 |
+| **安全性** | 是否没有有害内容？ | 分类器、LLM 评审 |
+| **帮助性** | 是否真正有用？ | 人工反馈 |
 
 ### 任务特定维度
 
-**For RAG:**
-- Faithfulness: Grounded in retrieved context?
-- Attribution: Proper citations?
-- No hallucination: Nothing made up?
+**对于 RAG：**
+- 忠实度：是否建立在检索上下文之上？
+- 归因：是否提供了正确引用？
+- 无幻觉：是否没有凭空编造？
 
-**For Code Generation:**
-- Executability: Does it run?
-- Correctness: Passes tests?
-- Style: Follows conventions?
+**对于代码生成：**
+- 可执行性：代码能否运行？
+- 正确性：能否通过测试？
+- 风格：是否遵循约定？
 
-**For Summarization:**
-- Coverage: Key points included?
-- Factual consistency: No introduced errors?
-- Compression: Appropriate length reduction?
+**对于摘要：**
+- 覆盖度：是否包含关键点？
+- 事实一致性：是否引入了错误？
+- 压缩度：长度缩减是否恰当？
 
 ---
 
@@ -82,14 +82,14 @@ You need to measure multiple dimensions independently.
 
 ### 精确匹配
 
-Simplest approach, rarely sufficient alone:
+最简单的方法，但单独使用通常不够：
 
 ```python
 def exact_match(prediction: str, reference: str) -> float:
     return float(prediction.strip().lower() == reference.strip().lower())
 ```
 
-**Use for:** Multiple choice, classification, entity extraction
+**适用场景：**选择题、分类、实体抽取。
 
 ### 关键词包含
 
@@ -100,7 +100,7 @@ def keyword_match(prediction: str, required_keywords: list[str]) -> float:
     return matches / len(required_keywords)
 ```
 
-**Use for:** Checking specific facts are mentioned
+**适用场景：**检查回答是否提到了特定事实。
 
 ### 语义相似度
 
@@ -111,12 +111,12 @@ def semantic_similarity(prediction: str, reference: str) -> float:
     return cosine_similarity(pred_embedding, ref_embedding)
 ```
 
-**Use for:** Paraphrase detection, general similarity
-**Limitation:** High similarity does not mean correct
+**适用场景：**改写检测、通用相似度判断。
+**局限：**相似度高并不代表内容正确。
 
 ### ROUGE（摘要）
 
-Measures n-gram overlap:
+衡量 n-gram 的重叠程度：
 
 ```python
 from rouge_score import rouge_scorer
@@ -132,11 +132,11 @@ def evaluate_summary(prediction: str, reference: str) -> dict:
     }
 ```
 
-**Limitation:** Measures overlap, not quality
+**局限：**衡量的是重叠，而不是质量。
 
 ### 代码执行
 
-For code generation, execution is ground truth:
+对于代码生成，执行结果就是事实标准：
 
 ```python
 def evaluate_code(prediction: str, test_cases: list[dict]) -> dict:
@@ -164,9 +164,9 @@ def evaluate_code(prediction: str, test_cases: list[dict]) -> dict:
 
 ---
 
-## LLM-as-Judge
+## LLM 评审
 
-Use an LLM to evaluate another LLM's outputs.
+使用一个 LLM 评估另一个 LLM 的输出。
 
 ### 基础评审 Prompt
 
@@ -212,7 +212,7 @@ def llm_judge(question: str, response: str, reference: str = None) -> dict:
 
 ### 两两比较
 
-Compare two responses directly:
+直接比较两个回答：
 
 ```python
 PAIRWISE_PROMPT = """
@@ -252,14 +252,14 @@ def pairwise_judge(question: str, response_a: str, response_b: str) -> dict:
 
 ### 评审校准
 
-LLM judges have biases:
+LLM 评审存在偏差：
 
-| Bias | Description | Mitigation |
+| 偏差 | 说明 | 缓解方式 |
 |------|-------------|------------|
-| Position bias | Prefers first or last option | Randomize order |
-| Length bias | Prefers longer responses | Instruct to ignore length |
-| Self-preference | Prefers own model's outputs | Use different judge model |
-| Format bias | Prefers certain formats | Diverse training examples |
+| 位置偏差 | 偏好第一个或最后一个选项 | 随机化顺序 |
+| 长度偏差 | 偏好更长的回答 | 明确要求忽略长度 |
+| 自偏好 | 偏好自身模型的输出 | 使用不同的评审模型 |
+| 格式偏差 | 偏好某些格式 | 使用多样化训练示例 |
 
 ```python
 def calibrated_pairwise_judge(question: str, response_a: str, response_b: str) -> dict:
@@ -282,13 +282,13 @@ def calibrated_pairwise_judge(question: str, response_a: str, response_b: str) -
 
 ### 何时使用人工评测
 
-| Use Case | Automate? | Human? |
+| 使用场景 | 自动化？ | 人工？ |
 |----------|-----------|--------|
-| Rapid iteration | Yes | Spot check |
-| Final quality assessment | Support | Yes |
-| Subjective quality | No | Yes |
-| Safety evaluation | Classifier | Review |
-| Edge cases | No | Yes |
+| 快速迭代 | 是 | 抽查 |
+| 最终质量评估 | 辅助 | 是 |
+| 主观质量 | 否 | 是 |
+| 安全评测 | 分类器 | 复核 |
+| 边界案例 | 否 | 是 |
 
 ### 标注指南
 
@@ -348,7 +348,7 @@ def interpret_kappa(kappa: float) -> str:
 
 ### RAGAS 指标
 
-RAGAS provides standard RAG evaluation metrics:
+RAGAS 提供了一组标准的 RAG 评测指标：
 
 ```python
 from ragas import evaluate
@@ -387,7 +387,7 @@ def evaluate_rag(
 
 ### 忠实度评测
 
-Check if response is grounded in context:
+检查回答是否有上下文依据：
 
 ```python
 FAITHFULNESS_PROMPT = """
@@ -418,9 +418,9 @@ def evaluate_faithfulness(context: str, response: str) -> dict:
     return parse_faithfulness_result(result)
 ```
 
-### Context Relevance
+### 上下文相关性
 
-Evaluate retrieved context quality:
+评估检索上下文的质量：
 
 ```python
 def evaluate_context_relevance(query: str, contexts: list[str]) -> dict:
@@ -448,9 +448,9 @@ def evaluate_context_relevance(query: str, contexts: list[str]) -> dict:
 
 ---
 
-## Building Evaluation Pipelines
+## 构建评测流水线
 
-### Evaluation Dataset Structure
+### 评测数据集结构
 
 ```python
 @dataclass
@@ -473,7 +473,7 @@ eval_dataset = [
 ]
 ```
 
-### Automated Evaluation Pipeline
+### 自动评测流水线
 
 ```python
 class EvaluationPipeline:
@@ -538,9 +538,9 @@ class EvaluationPipeline:
 
 ---
 
-## Production Monitoring
+## 生产监控
 
-### Key Metrics to Track
+### 需要跟踪的关键指标
 
 ```python
 PRODUCTION_METRICS = {
@@ -565,7 +565,7 @@ PRODUCTION_METRICS = {
 }
 ```
 
-### Online Evaluation
+### 在线评测
 
 ```python
 class OnlineEvaluator:
@@ -622,11 +622,11 @@ def detect_quality_drift(
 
 ---
 
-## 2026 Eval Evolution: Beyond LLM-as-Judge
+## 2026 年评测演进：超越 LLM 评审
 
-The 2023-2024 playbook ("use GPT-4 as a judge") was good enough for v1 systems but cracked under three pressures: cost at scale, agent trajectories that string-graders cannot inspect, and benchmarks that conflate retrieval, memory, and reasoning. By May 2026 the production eval stack has split into four layers that work together.
+2023～2024 年“使用 GPT-4 作为评审”的方案足以支撑 v1 系统，但在三方面承压：规模化成本、字符串评审器无法检查的 Agent 轨迹，以及把检索、记忆和推理混为一谈的基准。到 2026 年 5 月，生产评测栈已经拆分为四个协同工作的层次。
 
-### The Layered Judge Architecture
+### 分层评审架构
 
 ```mermaid
 flowchart TD
@@ -642,95 +642,95 @@ flowchart TD
     I --> J
 ```
 
-The cost math forces this shape: serving frontier judges (Claude Opus 4.7, GPT-5, Gemini Ultra 3) on every production trace is unaffordable above ~100K req/day. Distilled judges run hot, frontier judges calibrate, humans set ground truth.
+成本计算决定了这种形态：当日请求量超过约 10 万时，为每条生产轨迹调用前沿评审模型（Claude Opus 4.7、GPT-5、Gemini Ultra 3）无法负担。蒸馏评审负责高频运行，前沿评审负责校准，人工负责建立事实标准。
 
-### Galileo Luna-2: Distilled Judges at Scale
+### Galileo Luna-2：规模化蒸馏评审
 
-[Galileo's Luna-2 family](https://www.galileo.ai/luna-2) (released February 2026) is a set of small, task-specific judge models trained on millions of frontier-judge labels plus human annotations. Galileo's published numbers:
+[Galileo 的 Luna-2 系列](https://www.galileo.ai/luna-2)（2026 年 2 月发布）是一组面向特定任务的小型评审模型，使用数百万条前沿评审标签和人工标注训练。Galileo 公布的数据如下：
 
-| Metric | Luna-2 vs Frontier Judge |
+| 指标 | Luna-2 相对前沿评审 |
 |--------|--------------------------|
-| Cost per evaluation | ~97% lower |
-| Latency P50 | ~10x lower (sub-100ms for short responses) |
-| Agreement with frontier judge | 88-92% across published benchmarks |
-| Agreement with human gold labels | Within 2-3 points of the frontier judge |
+| 单次评测成本 | 低约 97% |
+| P50 延迟 | 低约 10 倍（短回答低于 100ms） |
+| 与前沿评审的一致率 | 在已发布基准上为 88～92% |
+| 与人工金标准标签的一致性 | 与前沿评审相差 2～3 个百分点以内 |
 
-The catch is the **shape** of the disagreement. Luna-2 is trained on a fixed taxonomy of failure modes (groundedness, instruction-following, toxicity, PII, off-topic, refusal). Anything outside that taxonomy regresses to a default score. So the pattern that holds up in production is:
+需要注意的是分歧的**形态**。Luna-2 按固定的失败模式分类体系训练（有依据性、指令遵循、毒性、PII、偏题、拒答），超出该体系的情况会退化为默认分数。因此，生产中可靠的模式是：
 
-- **Use Luna-2 (or a Luna-equivalent) inline** on every trace for the taxonomy it covers.
-- **Use the frontier judge** on a sampled 1-5% of traces to detect drift between the distilled judge and the larger model.
-- **Fall back to frontier** automatically when the distilled judge returns low confidence (Luna-2 emits a confidence score, not just a label).
-- **Never trust the distilled judge alone for novel failure modes** that were not in its training distribution: a freshly-released attack vector, a new category of user intent, or a domain-specific factuality check.
+- 对它覆盖的分类，每条轨迹都**在线调用 Luna-2（或同等模型）**。
+- 对 1～5% 的轨迹抽样调用**前沿评审**，检测蒸馏评审与大模型之间的漂移。
+- 蒸馏评审置信度较低时自动**回退到前沿评审**（Luna-2 输出的不只是标签，还包括置信度分数）。
+- 对训练分布中不存在的新失败模式，**绝不能只信任蒸馏评审**，例如刚出现的攻击向量、新的用户意图类别或领域专属事实性检查。
 
-Galileo's [public technical report](https://www.galileo.ai/research/luna-2) walks through the distillation recipe and where Luna-2 still under-performs frontier judges (long-horizon multi-step reasoning, low-resource languages).
+Galileo 的[公开技术报告](https://www.galileo.ai/research/luna-2)介绍了蒸馏方案，以及 Luna-2 仍弱于前沿评审的场景（长时域多步推理、低资源语言）。
 
-Other shipped distilled judges to compare against:
+还可以比较以下已经发布的蒸馏评审：
 
-- [Patronus AI Lynx](https://www.patronus.ai/lynx) for groundedness, similar cost profile.
-- [Vectara HHEM-2](https://www.vectara.com/blog/hhem) for hallucination detection.
-- [Arize Phoenix Evals](https://arize.com/docs/phoenix/) which ships open distilled judges plus calibration harness.
+- [Patronus AI Lynx](https://www.patronus.ai/lynx)：用于有依据性检测，成本画像相近。
+- [Vectara HHEM-2](https://www.vectara.com/blog/hhem)：用于幻觉检测。
+- [Arize Phoenix Evals](https://arize.com/docs/phoenix/)：提供开放的蒸馏评审以及校准工具。
 
-### Sierra tau2-bench and Variants
+### Sierra tau2-bench 及其变体
 
-[Sierra's tau-bench](https://github.com/sierra-research/tau-bench) (2024) was the first realistic agent benchmark that measured tool-use success in a simulated business environment. The 2026 successors generalize that idea.
+[Sierra 的 [tau-bench](https://github.com/sierra-research/tau-bench)（2024）是首个在模拟商业环境中衡量工具使用成功率的真实 Agent 基准。2026 年的后继基准将这一思路推广开来。
 
-[tau2-bench](https://github.com/sierra-research/tau-bench) (released Q1 2026) is a major update:
+[tau2-bench](https://github.com/sierra-research/tau-bench)（2026 年第一季度发布）是一次重大更新：
 
-- **More domains**: retail, airline, financial, healthcare, telecom.
-- **Pass^k metric**: measures the probability that the agent succeeds on **all** k repeated trials of the same task. Pass^1 is the traditional success rate. Pass^4 is what tells you whether the agent is reliable.
-- **Verifier-based grading**: deterministic post-conditions (the order is canceled, the refund exists, the seat is changed) rather than LLM-graded transcript scoring.
+- **更多领域**：零售、航空、金融、医疗、通信。
+- **Pass^k 指标**：衡量 Agent 在同一任务的 k 次重复试验中**全部**成功的概率。Pass^1 是传统成功率，Pass^4 才能说明 Agent 是否可靠。
+- **基于验证器评分**：检查确定性的后置条件（订单已取消、退款已创建、座位已变更），而不是让 LLM 给对话记录打分。
 
-Sister benchmarks:
+配套基准：
 
-- **[tau-Voice](https://sierra.ai/blog/tau-voice)**: speech-to-speech variant where the agent operates over voice channels. Catches a class of failures (timing, interruption handling, recovery from ASR errors) that text-only benchmarks miss entirely.
-- **[tau-Knowledge](https://sierra.ai/blog/tau-knowledge)**: extends the simulation with an internal knowledge base the agent must retrieve from. Decouples "does the agent retrieve" from "does the agent act."
+- **[tau-Voice](https://sierra.ai/blog/tau-voice)**：语音到语音的变体，Agent 通过语音通道工作，可以发现纯文本基准完全遗漏的一类失败（时序、中断处理、从 ASR 错误中恢复）。
+- **[tau-Knowledge](https://sierra.ai/blog/tau-knowledge)**：在模拟环境中加入 Agent 必须检索的内部知识库，将“Agent 是否能检索”和“Agent 是否能行动”解耦。
 
-In practice, the pass^k metric is the most actionable. A Pass^1 of 70% and a Pass^4 of 12% says "the agent works on the easy path but cannot recover from any small perturbation." That is exactly the signal production teams need before rolling out an agent at scale.
+实践中，Pass^k 最具行动指导意义。Pass^1 为 70%、Pass^4 为 12% 表明“Agent 只在简单路径上有效，无法从任何轻微扰动中恢复”。这是生产团队大规模上线 Agent 前需要看到的信号。
 
-### Agent-as-Judge: Trajectory Grading
+### Agent 评审：轨迹评分
 
-LLM-as-judge scored the final answer. Agent-as-judge scores the **trajectory**: the sequence of tool calls, intermediate states, retries, and reasoning steps the agent went through.
+LLM 评审只给最终答案评分；Agent 评审则给**轨迹**评分，即 Agent 经历的工具调用、中间状态、重试和推理步骤序列。
 
-This is necessary because long-horizon agents fail in ways the final answer cannot reveal:
+这是必要的，因为长时域 Agent 会以最终答案无法揭示的方式失败：
 
-- **Right answer, wrong reasoning**: the agent guessed the right number after a botched calculation.
-- **Right answer, dangerous path**: the agent tried four destructive tool calls before a fifth (safe) one happened to succeed.
-- **Right answer, runaway cost**: the agent made 47 retrieval calls when 2 would have sufficed.
+- **答案正确、推理错误**：Agent 在计算过程出错后碰巧猜中了正确数字。
+- **答案正确、路径危险**：Agent 先尝试了四次破坏性工具调用，第五次安全调用才碰巧成功。
+- **答案正确、成本失控**：只需两次检索，Agent 却发起了 47 次。
 
-The pattern in production:
+生产中的典型做法：
 
-- **Process Reward Models (PRMs)** score each step in the trajectory independently. PRMs were originally trained for math (OpenAI's [Let's Verify Step by Step](https://arxiv.org/abs/2305.20050)) and have generalized: by 2026 there are PRMs for code, tool-use trajectories, and multi-turn dialogue.
-- **An auxiliary "auditor" agent** (often a different model from the one being graded) replays the trajectory, asks "was this step justified?" at each node, and emits a graded transcript. This is what the [DeepMind agent-as-judge paper](https://arxiv.org/abs/2410.10934) (Oct 2024, refined through 2026) formalized.
-- **Trajectory failure modes** that show up in this kind of grading:
-  - **Reasoning-action mismatch**: the agent's chain-of-thought says one thing, the tool call does another.
-  - **Over-retrieval**: more retrieval calls than needed.
-  - **Tool flailing**: trying the same tool with slight variations until something works.
-  - **Premature commitment**: writing the answer before all evidence is in.
-  - **Self-jailbreaking**: the agent's own intermediate reasoning bypasses its own safety policy.
+- **过程奖励模型（PRM）**独立评估轨迹中的每一步。PRM 最初用于数学训练（OpenAI 的[逐步验证](https://arxiv.org/abs/2305.20050)），到 2026 年已经扩展到代码、工具使用轨迹和多轮对话。
+- **辅助“审计 Agent”**（通常与被评模型不同）重放轨迹，在每个节点询问“这一步有依据吗”，并输出带评分的记录。[DeepMind 的 Agent 评审论文](https://arxiv.org/abs/2410.10934)（2024 年 10 月，持续完善至 2026 年）对这一方法进行了形式化。
+- **这类评分会暴露的轨迹失败模式：**
+  - **推理与动作不匹配**：Agent 的思维链说了一件事，实际工具调用做了另一件事。
+  - **过度检索**：检索次数超出需要。
+  - **工具乱试**：对同一工具做轻微变体尝试，直到某次成功。
+  - **过早承诺**：证据尚未收齐就写出答案。
+  - **自我越狱**：Agent 自身的中间推理绕过了安全策略。
 
-The [Anthropic Constitutional Classifiers paper](https://www.anthropic.com/research/constitutional-classifiers) (Jan 2025) and follow-up work shows that judging trajectories with a constitutional classifier catches a meaningful fraction of safety failures that final-answer grading misses entirely.
+Anthropic 的[宪法分类器论文](https://www.anthropic.com/research/constitutional-classifiers)（2025 年 1 月）及后续工作表明，用宪法分类器评估轨迹，能够捕获一部分最终答案评分完全遗漏的安全失败。
 
-### HaluMem: Operation-Level Hallucination Benchmark
+### HaluMem：操作级幻觉基准
 
-[HaluMem](https://arxiv.org/abs/2511.03506) (November 2025) is the first benchmark to break hallucination evaluation into the **operations** that produce or use memory, not just the final answer:
+[HaluMem](https://arxiv.org/abs/2511.03506)（2025 年 11 月）是首个将幻觉评测拆分为产生或使用记忆的**操作**、而不只评估最终答案的基准：
 
-| Stage | What Is Measured | Typical Failure |
+| 阶段 | 衡量内容 | 典型失败 |
 |-------|------------------|-----------------|
-| Extraction | The fact written to memory matches the source | The agent stored "user is allergic to peanuts" when the source said "user dislikes peanuts" |
-| Update | A memory update is correct relative to prior state | A new memory contradicts an older memory without resolution |
-| QA | The answer is grounded in stored memories | The agent answers from parametric knowledge while pretending to cite memory |
+| 抽取 | 写入记忆的事实与来源一致 | 来源说“用户不喜欢花生”，Agent 却记成“用户对花生过敏” |
+| 更新 | 记忆更新相对于原状态是正确的 | 新记忆与旧记忆矛盾，却没有解决冲突 |
+| 问答 | 回答建立在已存记忆上 | Agent 假装引用记忆，实际使用的是参数知识 |
 
-The big insight from the HaluMem paper: a system can hit very high QA accuracy on standard hallucination benchmarks while making catastrophic extraction errors. Aggregate metrics hide the stage where the error originates, which is the only stage you can actually fix.
+HaluMem 论文的关键洞见是：系统可能在标准幻觉基准上取得很高的问答准确率，却在记忆抽取时犯下灾难性错误。聚合指标会隐藏错误发生的阶段，而那个阶段才是实际可以修复的地方。
 
-The practical recipe:
+实践方案：
 
-- Instrument the memory layer with **per-operation evals**: every write, update, and read has a separate eval.
-- Use a distilled judge (Luna-2 or similar) per operation type.
-- Track each stage's error rate over time; a 5% extraction error compounds over thousands of operations into a wholly unreliable agent.
+- 为记忆层建立**按操作拆分的评测**：每次写入、更新和读取都有独立评测。
+- 为每种操作使用蒸馏评审（Luna-2 或类似模型）。
+- 持续跟踪各阶段错误率；5% 的抽取错误经过数千次操作累积后，会使 Agent 完全不可靠。
 
-### A Production Eval Stack in May 2026
+### 2026 年 5 月的生产评测栈
 
-A defensible stack for a customer-facing agent product looks roughly like:
+一个经得起审查的面向客户 Agent 产品评测栈大致如下：
 
 ```mermaid
 flowchart LR
@@ -745,78 +745,78 @@ flowchart LR
     I --> J[Distilled judge retraining quarterly]
 ```
 
-This is not free, but it is dramatically cheaper than running a frontier judge on every trace, and it catches failure classes (process errors, memory errors, trajectory errors) that pure final-answer grading cannot see.
+这并非没有成本，但比为每条轨迹运行前沿评审便宜得多，而且能够捕获纯最终答案评分看不到的失败类别（过程错误、记忆错误、轨迹错误）。
 
-### Take-Aways for Interviews
+### 面试要点
 
-- "LLM-as-judge" is now the worst-case fallback, not the default.
-- The serious teams stack **distilled judges inline + frontier judges for calibration + human review for ground truth**.
-- For agents, **judge the trajectory, not just the answer**. Pass^k, PRMs, and agent-auditors are how.
-- For memory-equipped systems, **measure extraction, update, and QA separately**; aggregate accuracy hides the failure site.
+- “LLM 评审”如今是最差情况下的回退方案，而不是默认方案。
+- 严肃的团队会组合使用**在线蒸馏评审 + 用于校准的前沿评审 + 建立事实标准的人工复核**。
+- 对 Agent 要**评估轨迹，而不仅是答案**；可使用 Pass^k、PRM 和 Agent 审计器。
+- 对带记忆系统，要**分别衡量抽取、更新和问答**；聚合准确率会掩盖失败位置。
 
 ---
 
 ## 面试问题
 
-### Q: How would you evaluate a RAG system?
+### Q：如何评测一个 RAG 系统？
 
-**Strong answer:**
-I would evaluate at multiple levels:
+**强回答：**
+我会在多个层次进行评测：
 
-**1. Retrieval quality:**
-- Precision@K: Are retrieved docs relevant?
-- Recall@K: Did we find all relevant docs?
-- MRR: Is the best doc ranked highly?
+**1. 检索质量：**
+- Precision@K：检索到的文档是否相关？
+- Recall@K：是否找到了全部相关文档？
+- MRR：最佳文档是否排在靠前位置？
 
-**2. Generation quality:**
-- Faithfulness: Is response grounded in context?
-- Relevance: Does it answer the question?
-- Completeness: All aspects addressed?
+**2. 生成质量：**
+- 忠实度：回答是否有上下文依据？
+- 相关性：是否回答了问题？
+- 完整性：是否覆盖了所有方面？
 
-**3. End-to-end:**
-- Answer correctness vs ground truth
-- User satisfaction (thumbs up/down)
+**3. 端到端质量：**
+- 与事实标准相比的答案正确性。
+- 用户满意度（点赞/点踩）。
 
-**Tools:**
-- RAGAS for automated metrics
-- LLM-as-judge for subjective quality
-- Human evaluation for gold standard
+**工具：**
+- 使用 RAGAS 获取自动指标。
+- 使用 LLM 评审衡量主观质量。
+- 使用人工评测建立金标准。
 
-**Process:**
-1. Create evaluation dataset (100+ examples)
-2. Run automated metrics on every change
-3. LLM judge for deeper analysis
-4. Human review for final validation
-5. Monitor in production continuously
+**流程：**
+1. 创建评测数据集（100 个以上样例）。
+2. 每次变更都运行自动指标。
+3. 用 LLM 评审进行深入分析。
+4. 人工复核完成最终验证。
+5. 持续监控生产表现。
 
-### Q: What are the limitations of LLM-as-judge?
+### Q：LLM 评审有哪些局限？
 
-**Strong answer:**
-Several known biases and limitations:
+**强回答：**
+它存在一些已知偏差和局限：
 
-**Biases:**
-- Position bias: Prefers first option in comparisons
-- Length bias: Prefers longer responses
-- Self-preference: May prefer own model's style
-- Format bias: Influenced by formatting
+**偏差：**
+- 位置偏差：比较时偏好第一个选项。
+- 长度偏差：偏好更长的回答。
+- 自偏好：可能偏好自身模型的风格。
+- 格式偏差：受到排版格式影响。
 
-**Mitigations:**
-- Swap positions and check consistency
-- Use different model as judge
-- Calibrate with human annotations
-- Multiple judge prompts
+**缓解方式：**
+- 交换选项位置并检查一致性。
+- 使用不同模型作为评审。
+- 用人工标注进行校准。
+- 使用多个评审 Prompt。
 
-**When unreliable:**
-- Highly domain-specific content
-- Subtle factual errors
-- Cultural/contextual nuances
-- Safety edge cases
+**不可靠的场景：**
+- 高度领域化的内容。
+- 细微的事实错误。
+- 文化或上下文差异。
+- 安全边界案例。
 
-**Best practice:**
-- Use for rapid iteration
-- Calibrate against human judgments
-- Do not rely solely on LLM judges
-- Human review for high-stakes decisions
+**最佳实践：**
+- 用于快速迭代。
+- 对照人工判断进行校准。
+- 不要只依赖 LLM 评审。
+- 高风险决策必须人工复核。
 
 ---
 

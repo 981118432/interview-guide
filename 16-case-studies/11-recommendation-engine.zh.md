@@ -1,27 +1,27 @@
 # 案例研究：AI 推荐引擎
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+本页与英文原文逐段对应，保留标题层级、列表、表格、代码、公式、链接和面试问答。
 
-## The Problem
+## 问题
 
-A streaming platform with **50 million users** needs to build a recommendation system that combines collaborative filtering with LLM-generated explanations: "Because you enjoyed Inception, you might like Tenet for its mind-bending time mechanics."
+一个拥有**5000 万用户**的流媒体平台需要构建推荐系统，将协同过滤与 LLM 生成的解释结合起来：“因为你喜欢《盗梦空间》，你可能会喜欢《信条》，因为它同样有烧脑的时间机制。”
 
-**Constraints given in the interview:**
-- Real-time recommendations (under 200ms p95)
-- Must explain why each recommendation was made
-- Cold-start handling for new users
-- Privacy: cannot leak viewing history between users
-- Daily active: 5M users, each viewing 10+ recommendation sets
-
----
-
-## The Interview Question
-
-> "Design a system that recommends movies AND explains the recommendation in natural language, at scale."
+**面试中给出的约束：**
+- 实时推荐（p95 低于 200ms）。
+- 必须解释每条推荐产生的原因。
+- 处理新用户冷启动。
+- 隐私：不能在用户之间泄露观看历史。
+- 日活 500 万用户，每人每天查看 10 组以上推荐。
 
 ---
 
-## Solution Architecture
+## 面试题
+
+> “设计一个能大规模推荐电影，并用自然语言解释推荐原因的系统。”
+
+---
+
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -47,25 +47,25 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Why Not Just Use LLM for Everything?
+### 1. 为什么不把所有事情都交给 LLM？
 
-**Answer:** Scale economics. Calling an LLM for 50M users × 10 recommendation sets/day = 500M LLM calls daily. At $0.001 per call, that is $500K/day. Instead:
+**回答：**规模经济不允许这样做。5000 万用户 × 每天 10 组推荐意味着每天 5 亿次 LLM 调用；每次 0.001 美元就是每天 50 万美元。因此改为：
 
-| Component | Role | Cost per User/Day |
+| 组件 | 作用 | 每用户每天成本 |
 |-----------|------|-------------------|
-| Embedding lookup | Fetch precomputed vector | $0.00001 |
-| ANN search | Find candidates | $0.0001 |
-| Cross-encoder rerank | Score top 100 | $0.001 |
-| LLM explanation | Natural language | $0.005 |
+| 嵌入查找 | 获取预计算向量 | $0.00001 |
+| ANN 搜索 | 查找候选 | $0.0001 |
+| Cross-Encoder 重排序 | 为 Top 100 打分 | $0.001 |
+| LLM 解释 | 生成自然语言 | $0.005 |
 | **Total** | | **$0.006** |
 
-The LLM is only used for the final explanation, not the ranking itself.
+LLM 只用于生成最终解释，不参与排名本身。
 
-### 2. Explanation Caching
+### 2. 解释缓存
 
-**Answer:** Most explanations can be cached. "Because you watched Inception" applies to thousands of users. We cache explanations at the (content_pair, reason_type) level:
+**回答：**大多数解释都可以缓存。“因为你看过《盗梦空间》”适用于数千名用户。我们按 `(content_pair, reason_type)` 粒度缓存解释：
 
 ```python
 cache_key = f"{source_movie}:{target_movie}:{reason_type}"
@@ -77,11 +77,11 @@ if not explanation:
     cache.set(cache_key, explanation, ttl=86400)
 ```
 
-Cache hit rate: 85%+ after warmup.
+预热后缓存命中率可达到 85% 以上。
 
-### 3. Cold-Start Handling
+### 3. 冷启动处理
 
-**Answer:** New users have no history for collaborative filtering. We use a **Hybrid Approach**:
+**回答：**新用户没有可供协同过滤使用的历史记录。我们采用**混合方案**：
 
 ```mermaid
 flowchart LR
@@ -97,14 +97,14 @@ flowchart LR
 
 ---
 
-## The Personalized Explanation Challenge
+## 个性化解释的挑战
 
-The explanation must feel personal, not generic:
+解释必须让人感到个性化，而不是泛泛而谈：
 
-**Bad:** "Tenet is a popular thriller."
-**Good:** "Because you enjoyed Inception's mind-bending plot, Tenet offers similar time-manipulation puzzles from the same director."
+**不好：**“《信条》是一部热门惊悚片。”
+**好：**“因为你喜欢《盗梦空间》的烧脑情节，《信条》提供了同一导演创作的类似时间操控谜题。”
 
-We achieve this by including user context in the prompt:
+我们通过在 Prompt 中加入用户上下文实现这一点：
 
 ```python
 prompt = f"""
@@ -124,45 +124,45 @@ Explanation:
 
 ---
 
-## Latency Budget
+## 延迟预算
 
-| Stage | Target | Actual p95 |
+| 阶段 | 目标 | 实际 p95 |
 |-------|--------|------------|
-| User embedding lookup | 5ms | 3ms |
-| ANN search (top 100) | 20ms | 15ms |
-| Cross-encoder rerank | 50ms | 45ms |
-| LLM explanation (cached) | 10ms | 8ms |
-| LLM explanation (miss) | 500ms | 450ms |
-| **Total (cache hit)** | **85ms** | **71ms** |
-| **Total (cache miss)** | **575ms** | **513ms** |
+| 用户嵌入查找 | 5ms | 3ms |
+| ANN 搜索（Top 100） | 20ms | 15ms |
+| Cross-Encoder 重排序 | 50ms | 45ms |
+| LLM 解释（命中缓存） | 10ms | 8ms |
+| LLM 解释（未命中） | 500ms | 450ms |
+| **总计（缓存命中）** | **85ms** | **71ms** |
+| **总计（缓存未命中）** | **575ms** | **513ms** |
 
-To meet 200ms p95, we ensure 95%+ cache hit rate for explanations and generate explanations asynchronously for new content pairs.
-
----
-
-## Interview Follow-Up Questions
-
-**Q: How do you prevent the LLM from hallucinating facts about movies?**
-
-A: The LLM receives a structured fact sheet for each movie (director, cast, themes, awards) as context. It can only use information from this sheet. We also have a post-generation validator that checks claims against our catalog metadata.
-
-**Q: What if a user's taste changes rapidly?**
-
-A: We use a **recency-weighted embedding update**. Recent watches are weighted 3x more than older ones. For real-time responsiveness, we maintain a "session embedding" that captures current-session behavior and blends it with the historical embedding.
-
-**Q: How do you A/B test recommendation algorithms?**
-
-A: We hash user_id to consistently assign users to experiment buckets. Each bucket can have different candidate generation, ranking, or explanation strategies. We track engagement metrics (click-through, watch time, skip rate) per bucket.
+为了满足 200ms p95，我们要确保解释缓存命中率超过 95%，并异步为新的内容对生成解释。
 
 ---
 
-## Key Takeaways for Interviews
+## 面试追问
 
-1. **LLMs for explanation, not ranking**: use traditional ML for scale, LLMs for personalization
-2. **Cache aggressively**: explanations for content pairs are reusable across users
-3. **Cold-start is a spectrum**: new users → content-based; some history → hybrid; full history → collaborative
-4. **Latency budgets require cache hit rate targets**: design the cache around your latency SLA
+**问：如何防止 LLM 编造电影事实？**
+
+答：LLM 会收到每部电影的结构化事实表（导演、演员、主题、奖项）作为上下文，只能使用表中的信息。生成后还会用校验器将声明与目录元数据比较。
+
+**问：如果用户偏好快速变化怎么办？**
+
+答：使用**按新近度加权的嵌入更新**，最近观看记录的权重是旧记录的 3 倍。为了实时响应，我们维护捕捉当前会话行为的“会话嵌入”，并将其与历史嵌入混合。
+
+**问：如何对推荐算法做 A/B 测试？**
+
+答：对 `user_id` 做哈希，将用户稳定分配到实验桶。每个桶可以使用不同的候选生成、排名或解释策略，并按桶跟踪互动指标（点击率、观看时长、跳过率）。
 
 ---
 
-*Related chapters: [Semantic Caching](../08-memory-and-state/05-semantic-caching.md), [Cost Optimization](../04-inference-optimization/07-cost-optimization-playbook.md)*
+## 面试关键要点
+
+1. **LLM 用于解释而非排名**：用传统 ML 支撑规模，用 LLM 做个性化。
+2. **积极缓存**：内容对的解释可以跨用户复用。
+3. **冷启动是一个连续谱**：新用户 → 基于内容；有少量历史 → 混合；历史完整 → 协同过滤。
+4. **延迟预算需要缓存命中率目标**：围绕延迟 SLA 设计缓存。
+
+---
+
+*相关章节：[语义缓存](../08-memory-and-state/05-semantic-caching.md)、[成本优化](../04-inference-optimization/07-cost-optimization-playbook.md)*

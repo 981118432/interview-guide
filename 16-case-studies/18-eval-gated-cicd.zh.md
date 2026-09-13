@@ -2,21 +2,21 @@
 
 本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
 
-A 28-engineer AI product team replaces post-merge regression hunts with eval-gated CI: every PR runs golden sets, LLM-as-judge with statistical correction, and failure-mode taxonomies before a merge button appears.
+一个由 28 名工程师组成的 AI 产品团队用评测闸门 CI 替代合并后的回归排查：每个 PR 在出现合并按钮前都要运行黄金集、带统计校正的 LLM 评审和失败模式分类。
 
-## The Business Problem
+## 业务问题
 
-An AI-first SaaS company ships a customer-facing answer-bot built on a RAG pipeline plus an agent loop. Six months ago the team shipped a "small" prompt change that regressed answer-quality on questions about a specific contract type, and lost a $4M renewal when the customer noticed. The post-incident review found three things: the change had not been evaluated against the contract-specific test set; the LLM-as-judge metric used in spot checks had drifted by 11 points and no one noticed; and a fix that needed a 2-day rollback took 9 days because no one had a safe-to-revert baseline.
+一家 AI 优先的 SaaS 公司发布了面向客户的问答机器人，底层是 RAG 流水线加 Agent 循环。六个月前，一次“很小”的 Prompt 变更导致特定合同类型问题的回答质量回归，客户发现后取消了 400 万美元续约。事后复盘发现：变更没有在合同专属测试集上评测；抽查使用的 LLM 评审指标漂移了 11 分却无人察觉；本应两天回滚的修复因为没有安全基线，花了 9 天。
 
-Constraints from the May 2026 reality:
+2026 年 5 月的现实约束：
 
-- 28 engineers across 4 teams; about 50 PRs per week touch the AI surface
-- Customers in regulated industries refuse to accept regression on their domain-specific queries
-- Per-PR eval budget: under $40 of model spend; full-run budget: under $1,200
-- p95 PR-to-merge time goal: under 90 minutes including eval
-- Quarterly auditor signoff on the eval methodology
+- 4 个团队共 28 名工程师；每周约 50 个 PR 会触及 AI 代码面
+- 受监管行业客户不接受其领域查询出现回归
+- 每个 PR 的评测预算：模型成本低于 $40；完整运行预算低于 $1200
+- PR 到合并的 p95 目标：包括评测在内低于 90 分钟
+- 评测方法每季度由审计员签字确认
 
-The May 2026 reality is that eval-gated CI is no longer a nice-to-have. Hamel Husain's [eval blog series](https://hamel.dev/blog/posts/evals/), Eugene Yan's writings ([evals](https://eugeneyan.com/writing/evals/)), and the [judgy library](https://github.com/ai-evaluation/judgy) for statistical correction have all converged on a playbook. Phoenix, Langfuse, Braintrust, and Galileo all ship CI integrations. The question is no longer "should we do this" but "how do we do this without doubling cycle time."
+2026 年 5 月的现实是，评测闸门 CI 已不再是可有可无的增强项。Hamel Husain 的[评测系列](https://hamel.dev/blog/posts/evals/)、Eugene Yan 的文章（[evals](https://eugeneyan.com/writing/evals/)）和用于统计校正的 [judgy 库](https://github.com/ai-evaluation/judgy)已经形成相近实践。Phoenix、Langfuse、Braintrust 和 Galileo 都提供 CI 集成。问题不再是“是否要做”，而是“如何做且不让周期翻倍”。
 
 ## 架构
 
@@ -49,80 +49,80 @@ flowchart TB
     BLOCK --> DEV
 ```
 
-### Components
+### 组件
 
-| Layer | Tech | Purpose |
+| 层 | 技术 | 用途 |
 |-------|------|---------|
-| Golden sets | YAML in repo, 1,200 to 4,000 cases per surface | Stable test base |
-| Code evaluators | Pytest with custom assertions | Cheap, deterministic checks |
-| LLM judges | Claude Sonnet 4.7 for judgment | Subjective quality |
-| Statistical correction | [judgy](https://github.com/ai-evaluation/judgy) | Convert judge scores to estimates with CIs |
-| Pipeline | GitHub Actions plus custom runner | CI orchestration |
-| Trace store | Langfuse | Per-PR observability |
-| Annotation | Argilla self-hosted | Human re-labeling for judge calibration |
+| 黄金集 | 仓库中的 YAML，每个产品面 1200～4000 个案例 | 稳定的测试基础 |
+| 代码评测器 | 带自定义断言的 Pytest | 便宜且确定的检查 |
+| LLM 评审 | 使用 Claude Sonnet 4.7 评审 | 主观质量 |
+| 统计校正 | [judgy](https://github.com/ai-evaluation/judgy) | 将评审分数转换为带置信区间的估计值 |
+| 流水线 | GitHub Actions + 自定义运行器 | CI 编排 |
+| 轨迹存储 | Langfuse | 每 PR 的可观测性 |
+| 标注 | 自托管 Argilla | 为评审校准重新人工标注 |
 
-### Data flow
+### 数据流
 
-1. PR opens; GitHub Actions fires; Stage 1 (lint, unit, type checks) runs in 2 minutes.
-2. Stage 2 starts the golden-set eval against a representative subset (10 to 25 percent of the full set by default; 100 percent on protected branches or when labels say `full-eval`).
-3. Each golden-set case runs through the new build, generates an output, and is scored by (a) code-based evaluators where deterministic checks apply (JSON schema, regex, factual lookups) and (b) an LLM judge for quality dimensions.
-4. Stage 3 corrects the judge scores using `judgy` with the train/dev/test split for the judge prompt.
-5. The corrected estimate (with confidence interval) is compared against `main`'s last green build; if the lower bound of the CI is within tolerance, the PR merges; otherwise it blocks with a detailed report.
+1. PR 打开后触发 GitHub Actions；第 1 阶段（Lint、单元测试、类型检查）在 2 分钟内完成。
+2. 第 2 阶段对黄金集的代表性子集运行评测（默认完整集合的 10%～25%；受保护分支或标签为 `full-eval` 时运行 100%）。
+3. 每个黄金集案例都用新构建运行并生成输出；适用确定性检查时由代码评测器（JSON Schema、正则、事实查找）评分，同时由 LLM 评审质量维度。
+4. 第 3 阶段使用 Judge Prompt 的 train/dev/test 划分，并通过 `judgy` 校正评审分数。
+5. 将校正后的估计值（含置信区间）与 `main` 最近一次绿色构建比较；如果置信区间下界在容忍范围内，PR 可以合并，否则阻断并生成详细报告。
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Golden-set construction and rotation
+### 1. 黄金集构建与轮换
 
-Each golden set is built from three sources: production trace samples from the last 90 days (stratified by failure modes from error analysis), synthetic adversarial cases generated by a separate red-team LLM, and curated edge cases from customer support tickets. We rotate 10 to 15 percent of cases quarterly; we never delete cases (cases get archived to a frozen "historical regressions" set that runs only nightly). This avoids the over-fitting trap where the eval set drifts with the product.
+每个黄金集来自三个来源：最近 90 天按失败模式分层的生产轨迹样本、独立红队 LLM 生成的合成对抗案例，以及从客服工单整理的边界案例。每季度轮换 10%～15% 的案例，但不删除案例，而是归档到只在夜间运行的冻结“历史回归集”。这样可以避免评测集随产品变化而过拟合。
 
-Sizing: 1,200 cases per surface is the floor; below this, the corrected-score CI is too wide to detect a 2-point regression at 95 percent confidence. Eugene Yan covers this sizing math; we re-derived it for our metric.
+规模上，每个产品面至少需要 1200 个案例；低于此规模时，校正分数的置信区间过宽，无法以 95% 置信度检测 2 分回归。我们根据自身指标重新推导了样本量。
 
-### 2. Train/dev/test split for the judge
+### 2. Judge 的 train/dev/test 划分
 
-The LLM judge is itself a model with prompt parameters and few-shot examples. We treat the judge prompt as a model and apply train/dev/test discipline: 60 percent of human-labeled cases tune the judge prompt, 20 percent select the best prompt variant, 20 percent are a hold-out we only consult before a major judge-prompt change. This pattern is the core of the [judgy methodology](https://github.com/ai-evaluation/judgy) and Hamel's eval posts.
+LLM Judge 本身也是带 Prompt 参数和 Few-shot 示例的模型。我们把 Judge Prompt 当作模型，遵循 train/dev/test 纪律：60% 的人工标注案例用于调优 Prompt，20% 选择最佳变体，20% 作为仅在重大 Judge Prompt 变更前查看的 Holdout。这是 [judgy 方法](https://github.com/ai-evaluation/judgy)和 Hamel 评测文章的核心。
 
-Re-calibration cadence: every 30 days, 50 fresh cases get re-labeled by 2 humans (Cohen's kappa over 0.7 required); if the judge's accuracy on dev set drops below 80 percent, we re-tune.
+重新校准周期为每 30 天：50 个新案例由两名人工重新标注（Cohen's kappa 必须超过 0.7）；Judge 在 dev 集上的准确率低于 80% 时重新调优。
 
-### 3. Statistical correction with judgy
+### 3. 使用 judgy 做统计校正
 
-Naive LLM-as-judge accuracy on subjective categories is around 75 to 88 percent in our domain. A raw judge score is biased. `judgy` computes a corrected estimate of the true pass rate using the judge's confusion matrix on the held-out set, and returns a confidence interval. We gate on the lower bound of the CI being within tolerance. This means we never block a PR on judge noise alone, and we never approve a regression that the judge merely failed to catch.
+在我们的领域，主观类别的朴素 LLM Judge 准确率约为 75%～88%，原始 Judge 分数存在偏差。`judgy` 使用 Judge 在 Holdout 上的混淆矩阵估计真实通过率，并返回置信区间。我们以置信区间下界是否在容忍范围内作为门禁，因此不会仅因 Judge 噪声阻断 PR，也不会因 Judge 没捕获回归就批准它。
 
-The math: if the judge has 85 percent precision and 92 percent recall on the held-out set, and the new build's judge-reported pass rate is 89 percent, the corrected estimate is about 87 percent with a 95 percent CI of roughly 83 to 91 percent. We allow merge if the CI lower bound is at most 2 points below `main`. ([Reference: judgy README math](https://github.com/ai-evaluation/judgy#statistical-correction)).
+计算示例：如果 Judge 在 Holdout 上精确率为 85%、召回率为 92%，新构建的 Judge 报告通过率为 89%，校正估计约为 87%，95% 置信区间约为 83%～91%。当区间下界最多比 `main` 低 2 分时允许合并（参阅 [judgy README 计算](https://github.com/ai-evaluation/judgy#statistical-correction)）。
 
-### 4. Failure-mode taxonomy as the assertion surface
+### 4. 将失败模式分类作为断言面
 
-We do not score "quality" as a single number. We score along axes drawn from our failure-mode taxonomy: hallucination, retrieval-miss, format violation, refusal, persona break, citation error. The taxonomy is the output of error analysis ([Hamel's open-coding + axial-coding pipeline](https://hamel.dev/blog/posts/field-guide/)) applied to 800 production failures over 6 months. Per-axis scores let us block on a hallucination regression even if overall quality improved.
+我们不把“质量”压缩成单一数字，而是按失败模式分类的轴评分：幻觉、检索遗漏、格式违规、拒答、人格破坏和引用错误。该分类来自对 6 个月内 800 个生产失败的错误分析（[Hamel 的开放编码 + 轴心编码流程](https://hamel.dev/blog/posts/field-guide/)）。按轴评分可以在总体质量提升时，仍阻断幻觉回归。
 
-### 5. Per-PR eval budget
+### 5. 每个 PR 的评测预算
 
-A full eval-set run costs $80 to $200 depending on model spend. At 50 PRs per week, the naive cost is $4K to $10K per week. We bound this:
+完整评测集运行一次的成本取决于模型用量，约为 80～200 美元。每周 50 个 PR 时，直接运行每周成本为 4000～1 万美元。因此我们限制：
 
-- Default PR runs 10 to 25 percent of the golden set, stratified by failure mode (so all failure modes are represented).
-- The `full-eval` label triggers 100 percent.
-- Nightly cron runs 100 percent on `main` to catch any drift we missed.
-- A new judge-prompt change triggers a 100 percent run on a frozen historical set.
+- 默认 PR 按失败模式分层抽取黄金集的 10%～25%（确保每种失败模式都有代表）。
+- `full-eval` 标签触发 100% 运行。
+- 每晚 Cron 在 `main` 上运行 100%，捕获遗漏的漂移。
+- Judge Prompt 发生新变更时，在冻结的历史集合上运行 100%。
 
-This bounds per-PR cost to under $40 and total per-week cost to under $1,200.
+这样每个 PR 成本低于 40 美元，每周总成本低于 1200 美元。
 
-### 6. Judge-prompt drift detection
+### 6. Judge Prompt 漂移检测
 
-Even with calibration, judge prompts drift: the underlying model updates, the few-shot examples become less representative, the prompt's vocabulary feels dated to the model. We monitor drift by:
+即使校准过，Judge Prompt 仍会漂移：底层模型更新，Few-shot 示例变得不具代表性，Prompt 词汇也可能对模型过时。我们通过以下方式监控漂移：
 
-- Re-running the held-out set monthly and reporting accuracy delta vs the previous month.
-- Tracking inter-judge agreement (we run two judge prompts in parallel; divergence over time signals drift in one).
-- Versioning the judge prompt in git; rolling back is a 1-commit operation.
+- 每月重新运行留出集，并报告相对于上月的准确率差异。
+- 跟踪评审间一致性（并行运行两个 Judge Prompt，随时间出现分歧说明其中一个发生漂移）。
+- 在 Git 中管理 Judge Prompt 版本；回滚只需一个提交。
 
-When drift exceeds 3 points or kappa drops below 0.65, we open a maintenance ticket.
+漂移超过 3 分或 kappa 低于 0.65 时，创建维护工单。
 
-### 7. Caching the eval pipeline
+### 7. 缓存评测流水线
 
-A typical golden-set case generates an output, which is then judged. The output is deterministic given the prompt and the model version. We cache (prompt-hash, model-version) to (output, judge-score) so that re-running the same eval is nearly free. Cache hit rate on PRs that touch only orchestration code (not prompts) is around 70 percent; this is a 3x cost reduction on this class of changes.
+典型黄金集案例先生成输出，再由 Judge 评分。在 Prompt 和模型版本确定时，输出是确定的。我们缓存 `(prompt-hash, model-version)` 到 `(output, judge-score)` 的映射，使重复评测几乎免费。只改编排代码、不改 Prompt 的 PR 缓存命中率约 70%，这类变更成本降低约 3 倍。
 
-### 8. PR-level instrumentation
+### 8. PR 级埋点
 
-Each PR's eval report includes: per-axis pass-rate vs main, per-axis examples that newly failed, per-axis examples that newly passed, judge-correction CI bounds, total cost, and a link to the trace store so engineers can replay any failing case. The report is posted as a GitHub comment within 3 minutes of the run completing.
+每个 PR 的评测报告包括：各轴相对 main 的通过率、新失败和新通过案例、Judge 校正置信区间、总成本，以及指向轨迹存储的链接，工程师可以重放任何失败案例。运行结束后 3 分钟内将报告作为 GitHub 评论发布。
 
-## CI Pipeline Sequence
+## CI 流水线时序
 
 ```mermaid
 sequenceDiagram
@@ -149,86 +149,86 @@ sequenceDiagram
     end
 ```
 
-## Failure Modes and Mitigations
+## 失败模式与缓解措施
 
-### F1: Judge prompt drift goes unnoticed
+### F1：Judge Prompt 漂移未被发现
 
-The judge gradually under-detects hallucinations after a model upgrade. Mitigation: monthly held-out replay; inter-judge agreement tracking; a "freeze judge" mode for protected branches that pins the judge model version even when newer models are available. The drift incident that broke us before was caused by exactly this; we now catch drift within one cycle.
+模型升级后，评审器逐渐漏检幻觉。缓解措施：每月重放留出集、跟踪评审间一致性，并为受保护分支提供“冻结评审”模式，即使有新模型也固定评审模型版本。此前导致故障的漂移事件正是由此引起；现在我们能在一个周期内捕获漂移。
 
-### F2: Eval set becomes overfit
+### F2：评测集被过拟合
 
-A few cases get debugged repeatedly; the prompt is implicitly tuned to them. Mitigation: quarterly rotation; reserved adversarial cases that are never shown to engineers in failure reports (only outcomes). A separate red-team team owns the held-out set.
+少数案例被反复调试，Prompt 在不知不觉中针对它们调优。缓解措施：按季度轮换；保留不会出现在工程师失败报告中的对抗案例（只展示结果）；由独立红队团队负责留出集。
 
-### F3: Single PR runs a corner of the eval that misses regressions
+### F3：单个 PR 只运行评测角落，漏掉回归
 
-Stratified sampling: we ensure each PR's 10-percent sample includes at least 1 case from each of the 12 failure modes. The full nightly run still happens on `main`. Per-PR coverage is bounded but not zero.
+采用分层抽样：确保每个 PR 的 10% 样本至少包含 12 种失败模式各 1 个案例。`main` 仍然每天夜间运行完整评测。每个 PR 的覆盖有限，但不是零。
 
-### F4: Cost overrun from accidental full-runs
+### F4：误触完整运行导致成本超支
 
-A `full-eval` label on every PR triples cost. Mitigation: the label requires an approval from a CODEOWNERS file; an automated reminder pings whoever applies it. We also cap monthly eval spend with a hard ceiling at $5K and refuse to start a job that would exceed it.
+每个 PR 都加上 `full-eval` 标签会使成本增加三倍。缓解措施是要求 CODEOWNERS 文件中的负责人批准该标签；自动提醒会通知添加标签的人。我们还将月度评测支出硬上限设为 $5K，预计超限的任务不会启动。
 
-### F5: Block-rate too high; developers learn to ignore
+### F5：阻断率过高，开发者学会忽略
 
-If 35 percent of PRs are blocked, developers stop reading reports and look for ways around. Mitigation: we tune the gating tolerance to keep block-rate at 5 to 12 percent; we treat block-rate as an SLI; when it spikes we investigate why (often the judge is too strict on a new failure mode). The goal is to surface real regressions, not act as a gatekeeping toy.
+如果 35% 的 PR 被阻断，开发者会停止阅读报告并寻找绕过方式。缓解措施是调节闸门容忍度，将阻断率保持在 5%～12%；把阻断率作为 SLI；出现尖峰时调查原因（通常是评审器对新的失败模式过于严格）。目标是暴露真实回归，而不是做一个形式上的门卫。
 
-### F6: Holdout set leakage into training or prompts
+### F6：留出集泄露到训练或 Prompt
 
-A held-out case ends up as a few-shot example. Mitigation: the held-out set is stored in a separate repo with a separate access list; engineers cannot read it; only the eval runner has a deploy key. Failure reports include hashes, not raw cases, for held-out failures.
+某个留出案例最终变成了 Few-shot 示例。缓解措施是将留出集存放在独立仓库并使用独立访问列表；工程师不能读取它，只有评测运行器拥有部署密钥。留出案例失败时，报告只包含哈希，不包含原始案例。
 
-### F7: Judge model deprecation
+### F7：评审模型弃用
 
-The vendor announces end-of-life for the judge model. Mitigation: we keep at least two judge models calibrated in parallel; when a deprecation lands, we have a 60-day window to swap with kappa thresholds preserved. The git history of judge prompts plus the calibration data make this routine.
+供应商宣布评审模型即将停止支持。缓解措施是至少并行校准两个评审模型；模型弃用时，我们有 60 天窗口完成替换，同时保持 Kappa 阈值。Judge Prompt 的 Git 历史和校准数据让这一过程可以常规化。
 
-### F8: Eval runner queue saturation
+### F8：评测运行器队列饱和
 
-A surge of PRs around release time queues evals 30 minutes deep. Mitigation: dedicated eval-runner GPU pool with autoscaling; priority lanes for protected branches; if queue depth exceeds 20, we automatically downgrade non-protected PRs to a 5 percent sample to clear the backlog faster.
+发布时间附近 PR 激增会让评测队列积压 30 分钟。缓解措施是使用带自动扩缩容的专用评测运行器 GPU 池，为受保护分支提供优先通道；队列深度超过 20 时，自动把非受保护 PR 降级为 5% 样本，以更快清空积压。
 
-## Operational Considerations
+## 运维考量
 
-### Monitoring
+### 监控
 
-| SLO | Target |
+| SLO | 目标 |
 |-----|--------|
-| PR-to-merge p95 | under 90 minutes |
-| Eval-cost per PR p95 | under $40 |
-| Block-rate (false negatives + true regressions) | 5 to 12 percent |
-| Judge inter-rater kappa | over 0.7 |
-| Holdout-set replay accuracy delta month-over-month | under 3 points |
-| Production regression escapes (post-deploy) | under 1 per quarter |
+| PR 到合并 p95 | 低于 90 分钟 |
+| 每 PR 评测成本 p95 | 低于 $40 |
+| 阻断率（误报 + 真实回归） | 5%～12% |
+| Judge 评审者间 Kappa | 超过 0.7 |
+| 留出集重放准确率月度差异 | 低于 3 分 |
+| 生产回归逃逸（部署后） | 每季度低于 1 次 |
 
-### Cost model
+### 成本模型
 
-At 50 PRs per week:
+每周 50 个 PR 时：
 
-- Default sampling: $25 per PR average; $1,250 per week
-- Full-eval runs (about 8 per week): $100 each; $800 per week
-- Nightly cron: $200 each; $1,400 per week
-- Judge re-calibration: $50 per month
-- Total: about $14K per month
+- 默认抽样：平均每 PR $25；每周 $1250
+- 完整评测（每周约 8 次）：每次 $100；每周 $800
+- 每晚 Cron：每次 $200；每周 $1400
+- Judge 重新校准：每月 $50
+- 合计：每月约 $14K
 
-This pays for itself with one prevented regression. Our post-incident estimate of the $4M renewal we lost suggests this is well-bounded by even one save per year.
+只要避免一次回归就能收回成本。事后估算的 400 万美元续约损失表明，每年避免一次类似事故就足以证明这笔投入合理。
 
 ### On-call playbook
 
-- Block-rate spike: check if any recent change to judge prompt or golden set drove this; compare per-axis scores to baseline.
-- Eval cost spike: check sample rate config; rate-limit `full-eval` label.
-- Judge drift alert: trigger calibration cycle; rotate judge to backup model if drift is severe.
-- Holdout breach (hash collision): immediately quarantine, regenerate the affected cases.
-- Eval runner outage: PRs queue with a clear "eval pending" status; we never auto-merge while the runner is down; SRE pages within 15 minutes.
+- 阻断率尖峰：检查近期 Judge Prompt 或黄金集变更是否导致问题，并将各轴分数与基线比较。
+- 评测成本尖峰：检查抽样率配置，并限制 `full-eval` 标签的使用。
+- Judge 漂移告警：触发校准周期；漂移严重时切换到备用评审模型。
+- 留出集泄露（哈希碰撞）：立即隔离并重新生成受影响案例。
+- 评测运行器故障：PR 进入队列并显示清晰的“评测待处理”状态；运行器宕机时绝不自动合并；15 分钟内通知 SRE。
 
 ### Quarterly review
 
-Every quarter the AI team reviews: failure-mode taxonomy (do the categories still match real production errors?), golden set rotation (which 10 to 15 percent are stale?), judge calibration history (is drift accelerating?), and block-rate trend (is the gate becoming theater?). This review feeds into the next quarter's eval roadmap. We use the [Hamel field-guide](https://hamel.dev/blog/posts/field-guide/) ritual: open-coding sessions on the most recent 50 failures, then axial coding to update the taxonomy.
+每季度 AI 团队都会复核：失败模式分类（类别是否仍匹配真实生产错误？）、黄金集轮换（哪些 10%～15% 已过时？）、Judge 校准历史（漂移是否加速？）以及阻断率趋势（闸门是否变成形式？）。复核结果进入下一季度评测路线图。我们采用 [Hamel field guide](https://hamel.dev/blog/posts/field-guide/) 流程：对最近 50 个失败进行开放编码，再通过轴心编码更新分类体系。
 
 ### Auditor pack
 
-The eval pipeline produces a quarterly auditor pack: methodology document (versioned in git), golden set summary (counts per failure mode), judge calibration results (Cohen's kappa over time), block-rate histogram, and a sample of failing PRs with the rationale. The pack is generated automatically and signed by the head of engineering.
+评测流水线每季度生成审计包：方法文档（在 Git 中版本化）、黄金集摘要（按失败模式计数）、Judge 校准结果（随时间变化的 Cohen's Kappa）、阻断率直方图，以及带理由的失败 PR 样本。审计包自动生成并由工程负责人签字。
 
 ### Why we do not use a single composite quality score
 
-The temptation is to roll all axes into one number and gate on it. We do not. A composite hides regressions: a hallucination regression can be masked by a format-compliance improvement. We gate on per-axis scores so that each axis has its own confidence interval and its own block. The cost is more report noise; the benefit is that we never silently regress on a critical dimension.
+把所有轴合并成一个数字并据此设闸门很诱人，但我们不这样做。综合分会隐藏回归：格式合规性的提升可能掩盖幻觉回归。我们按各轴分数设闸门，让每个轴都有自己的置信区间和阻断条件。代价是报告噪声更多，收益是关键维度不会静默回归。
 
-## What Strong Interview Candidates Cover
+## 优秀面试候选人应覆盖的内容
 
 - They distinguish code-based evaluators (cheap, deterministic) from LLM-as-judge (expensive, subjective) and use both in different stages.
 - They name statistical correction explicitly; they understand that a raw judge score is a biased estimate and that confidence intervals are the right abstraction for gating.
