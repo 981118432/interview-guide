@@ -1,27 +1,25 @@
 # 案例研究：多租户 AI SaaS 平台
 
-本页保留英文原文的章节层级、列表、表格、代码、公式、链接和面试问答，并提供对应的中文说明。
+## 问题
 
-## The Problem
+一家 B2B 初创公司正在构建**AI 文档分析平台**：每个客户上传自己的合同，AI 针对这些合同回答问题。客户之间可能是竞争对手，因此绝不能互相看到数据。
 
-A B2B startup is building an **AI-powered document analysis platform** where each customer uploads their own contracts, and the AI answers questions about them. Customers include competitors who must never see each other's data.
-
-**Constraints given in the interview:**
-- 500 enterprise customers, each with 10,000-100,000 documents
-- Absolute data isolation: Customer A's data cannot leak to Customer B
-- Shared infrastructure for cost efficiency
-- Compliance: SOC 2 Type II, GDPR
-- Query latency under 2 seconds
+**面试给出的约束：**
+- 500 家企业客户，每家 10,000～100,000 份文档。
+- 绝对数据隔离：客户 A 的数据不能泄露给客户 B。
+- 为降低成本使用共享基础设施。
+- 合规要求：SOC 2 Type II、GDPR。
+- 查询延迟低于 2 秒。
 
 ---
 
-## The Interview Question
+## 面试题
 
-> "Design a multi-tenant RAG system where Coca-Cola and Pepsi can both be customers, and there is zero risk of cross-tenant data leakage."
+> “设计一个多租户 RAG 系统，让 Coca-Cola 和 Pepsi 都可以成为客户，并且跨租户数据泄露风险为零。”
 
 ---
 
-## Solution Architecture
+## 解决方案架构
 
 ```mermaid
 flowchart TB
@@ -52,35 +50,35 @@ flowchart TB
 
 ---
 
-## Key Design Decisions
+## 关键设计决策
 
-### 1. Hybrid Isolation: Namespace vs Physical
+### 1. 混合隔离：命名空间与物理隔离
 
-**Answer:** Pure physical isolation (one database per tenant) is expensive. Pure namespace isolation (shared database with tenant_id filter) has leakage risk if a filter bug occurs. We use a **tiered approach**:
+**回答：**每租户一个数据库的纯物理隔离成本很高；共享数据库加 `tenant_id` 过滤的纯命名空间隔离，又可能因过滤器 Bug 造成泄露。因此采用**分层方案**：
 
-| Tier | Tenant Size | Isolation Method | Why |
+| 层级 | 租户规模 | 隔离方式 | 原因 |
 |------|-------------|------------------|-----|
-| Standard | <50K docs | Namespace in shared Qdrant | Cost efficient |
-| Premium | 50K-500K docs | Dedicated Qdrant collection | Performance isolation |
-| Enterprise | >500K docs | Dedicated Qdrant pod | Physical + regulatory |
+| 标准 | <50K 文档 | 共享 Qdrant 中的命名空间 | 成本高效 |
+| 高级 | 50K～500K 文档 | 独立 Qdrant collection | 隔离性能 |
+| 企业 | >500K 文档 | 独立 Qdrant pod | 物理隔离 + 监管 |
 
-### 2. Defense in Depth for Data Isolation
+### 2. 纵深防御保障数据隔离
 
-**Answer:** We never trust a single layer. Our isolation stack:
+**回答：**绝不依赖单一层。隔离栈包括：
 
-1. **API Gateway**: Validates tenant_id from JWT, rejects cross-tenant requests
-2. **Database Layer**: Row-level security (RLS) enforces tenant_id filter at DB level
-3. **Application Layer**: ORM wrapper automatically injects tenant filter
-4. **LLM Layer**: System prompt explicitly states "You are answering for Tenant X only"
-5. **Output Layer**: Post-generation filter scans for any document IDs not belonging to tenant
+1. **API Gateway**：从 JWT 校验 `tenant_id`，拒绝跨租户请求。
+2. **数据库层**：用行级安全（RLS）在数据库层强制 `tenant_id` 过滤。
+3. **应用层**：ORM 封装自动注入租户过滤条件。
+4. **LLM 层**：System Prompt 明确声明“只为 Tenant X 回答”。
+5. **输出层**：生成后扫描不属于当前租户的文档 ID。
 
-### 3. Why Not One Vector DB Per Tenant?
+### 3. 为什么不为每个租户部署一个向量数据库？
 
-**Answer:** 500 tenants × $100/month per managed instance = $50K/month just for databases. By using namespace isolation for 80% of tenants, we reduce this to $8K/month. The remaining 20% on dedicated infrastructure pay a premium tier price.
+**回答：**500 个租户乘以每个托管实例每月 100 美元，仅数据库就要 5 万美元。对 80% 的租户采用命名空间隔离，可降到每月 8,000 美元；剩余 20% 的租户通过高级价格承担独立基础设施成本。
 
 ---
 
-## The Data Ingestion Pipeline
+## 数据接入流水线
 
 ```mermaid
 flowchart LR
@@ -102,22 +100,22 @@ flowchart LR
     end
 ```
 
-**Critical:** The tenant_id is attached at the **earliest possible point** (upload validation) and travels with the document through every stage. It is not derived or looked up later.
+**关键点：**在**最早可能的位置**（上传校验）附加 `tenant_id`，并让它随文档穿过每个阶段；不能等到后面再推导或查询。
 
 ---
 
-## Handling the Compliance Requirements
+## 处理合规要求
 
 ### SOC 2 Type II
 
-| Control | Implementation |
+| 控制 | 实现 |
 |---------|----------------|
-| Access logging | Every query logged with tenant_id, user_id, timestamp |
-| Encryption at rest | AES-256 for blob storage, database-native for vector DB |
-| Encryption in transit | TLS 1.3 everywhere |
-| Access reviews | Automated quarterly reports from audit logs |
+| 访问日志 | 每次查询记录 `tenant_id`、`user_id` 和时间戳 |
+| 静态加密 | Blob 存储使用 AES-256，向量数据库使用原生加密 |
+| 传输加密 | 全链路使用 TLS 1.3 |
+| 访问复核 | 从审计日志自动生成季度报告 |
 
-### GDPR Right to Deletion
+### GDPR 删除权
 
 ```python
 async def delete_tenant_data(tenant_id: str):
@@ -136,43 +134,43 @@ async def delete_tenant_data(tenant_id: str):
 
 ---
 
-## Cost Analysis (500 Tenants)
+## 成本分析（500 个租户）
 
-| Component | Monthly Cost |
+| 组件 | 每月成本 |
 |-----------|--------------|
-| Shared Vector DB (Qdrant Cloud) | $2,500 |
-| Dedicated pods (20 enterprise tenants) | $4,000 |
-| LLM costs (pooled, GPT-4o-mini) | $8,000 |
-| Blob storage (S3) | $1,500 |
-| Audit logging (CloudWatch) | $500 |
-| **Total** | **$16,500/month** |
-| **Per tenant average** | **$33/month** |
+| 共享向量数据库（Qdrant Cloud） | $2,500 |
+| 独立 pod（20 个企业租户） | $4,000 |
+| LLM 成本（共享池，GPT-4o-mini） | $8,000 |
+| Blob 存储（S3） | $1,500 |
+| 审计日志（CloudWatch） | $500 |
+| **总计** | **$16,500/月** |
+| **每租户平均** | **$33/月** |
 
 ---
 
-## Interview Follow-Up Questions
+## 面试追问
 
-**Q: What if a bug in your ORM bypasses the tenant filter?**
+**Q：如果 ORM Bug 绕过了租户过滤怎么办？**
 
-A: Defense in depth. Even if the ORM fails, the database enforces RLS (Row-Level Security). The query `SELECT * FROM documents` internally becomes `SELECT * FROM documents WHERE tenant_id = current_tenant()`. This is enforced at the Postgres level, not the application level.
+A：依靠纵深防御。即便 ORM 失败，数据库仍通过 RLS 强制隔离。`SELECT * FROM documents` 在内部会变成 `SELECT * FROM documents WHERE tenant_id = current_tenant()`，这由 Postgres 层执行，不依赖应用层。
 
-**Q: How do you handle a tenant who wants to export all their data?**
+**Q：如何处理租户导出全部数据的请求？**
 
-A: We provide a data portability API that streams all documents with their embeddings and metadata. The export is triggered by an admin, logged in the audit trail, and delivered to a customer-controlled S3 bucket (not our infrastructure).
+A：提供数据可移植性 API，流式导出所有文档及其 Embedding 和元数据。导出由管理员触发，写入审计轨迹，并交付到客户控制的 S3 bucket，而不是我们的基础设施。
 
-**Q: What if the LLM hallucinates information from its training data that matches a competitor's confidential info?**
+**Q：如果 LLM 从训练数据中幻觉出与竞争对手机密信息相同的内容怎么办？**
 
-A: This is a real risk. We mitigate by: (1) Using only retrieval-grounded generation (the LLM cannot answer without retrieved docs). (2) Filtering outputs for any content that does not trace back to the tenant's uploaded documents. (3) Offering a "private model" tier where we fine-tune a tenant-specific model on their data only.
-
----
-
-## Key Takeaways for Interviews
-
-1. **Multi-tenancy is about layers**: never rely on a single isolation mechanism
-2. **Tiered isolation balances cost and security**: not all tenants need dedicated infrastructure
-3. **Tenant ID must be immutable and early**: tag at upload, not at query time
-4. **Compliance is an architecture concern**: design for audit, deletion, and portability from day one
+A：这是实际风险。缓解方式包括：(1) 只做检索支撑的生成，没有检索文档就不能回答；(2) 过滤无法追溯到租户上传文档的输出；(3) 提供“私有模型”层级，只在该租户数据上微调专属模型。
 
 ---
 
-*Related chapters: [LLM Security](../12-security-and-access/01-llm-security.md), [Access Control & Multi-Tenant Isolation](../12-security-and-access/02-access-control.md)*
+## 面试要点
+
+1. **多租户是分层问题**：不能依赖单一隔离机制。
+2. **分层隔离平衡成本和安全**：不是所有租户都需要独立基础设施。
+3. **租户 ID 必须尽早且不可变**：在上传时标记，而不是查询时才添加。
+4. **合规是架构问题**：从第一天就设计审计、删除和可移植性。
+
+---
+
+*相关章节：[LLM 安全](../12-security-and-access/01-llm-security.md)、[访问控制与多租户隔离](../12-security-and-access/02-access-control.md)*
